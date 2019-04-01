@@ -16,13 +16,15 @@ if err != nil {
 }
 
 // Pagination List
-bm.WithColl(MongoUser).
-	WithLimit(&bom.Limit{Page: pg.Page, Size: pg.Size})
+bm.WithColl(MongoUser).WithLimit(&bom.Limit{Page: pg.Page, Size: pg.Size})
 
 // set sorting
 if sort != nil {
 	bm.WithSort(&bom.Sort{Field: sort.Field, Type: sort.Type})
 }
+
+// set condition
+bm.Where("_id", bom.ToObj(id))
 
 // execute with 
 pagination, err := bm.ListWithPagination(func(cur *mongo.Cursor) error {
