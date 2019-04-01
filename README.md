@@ -3,6 +3,7 @@ Mongodb query wrapper based on (go.mongodb.org/mongo-driver)
 
 ### Example
 ``` go
+var users []*model.User
 
 // create new instace
 bm, err := bom.New(
@@ -20,12 +21,13 @@ if sort != nil {
 	bmQuery.WithSort(&bom.Sort{Field: sort.Field, Type: sort.Type})
 }
 
-// execute
-p, err := bm.ListWithPagination(func(cur *mongo.Cursor) error {
+// execute with 
+pagination, err := bm.ListWithPagination(func(cur *mongo.Cursor) error {
 	var result model.User
 	err := cur.Decode(&result)
 	users = append(users, &result)
 	return err
 })
+
 	
 ```
