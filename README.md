@@ -11,14 +11,17 @@ bm, err := bom.New(
 	bom.SetDatabaseName(repo.config.DBName),
 )
 
+if err != nil {
+    fmt.Error(err)
+}
+
 // Pagination List
-bmQuery := repo.bom().
-    WithColl(MongoUser).
+bm.WithColl(MongoUser).
 	WithLimit(&bom.Limit{Page: pg.Page, Size: pg.Size})
 
 // set sorting
 if sort != nil {
-	bmQuery.WithSort(&bom.Sort{Field: sort.Field, Type: sort.Type})
+	bm.WithSort(&bom.Sort{Field: sort.Field, Type: sort.Type})
 }
 
 // execute with 
@@ -28,6 +31,5 @@ pagination, err := bm.ListWithPagination(func(cur *mongo.Cursor) error {
 	users = append(users, &result)
 	return err
 })
-
 	
 ```
