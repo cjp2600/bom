@@ -235,14 +235,16 @@ func (b *Bom) calculateOffset(page, size int32) (limit int32, offset int32) {
 
 func (b *Bom) getSort(sort *Sort) (map[string]interface{}, bool) {
 	sortMap := make(map[string]interface{})
-	if len(sort.Field) > 0 {
-		sortMap[strings.ToLower(sort.Field)] = 1
-		if len(sort.Type) > 0 {
-			if val, ok := mType[strings.ToLower(sort.Type)]; ok {
-				sortMap[strings.ToLower(sort.Type)] = val
+	if sort != nil {
+		if len(sort.Field) > 0 {
+			sortMap[strings.ToLower(sort.Field)] = 1
+			if len(sort.Type) > 0 {
+				if val, ok := mType[strings.ToLower(sort.Type)]; ok {
+					sortMap[strings.ToLower(sort.Type)] = val
+				}
 			}
+			return sortMap, true
 		}
-		return sortMap, true
 	}
 	return sortMap, false
 }
