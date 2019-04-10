@@ -1,4 +1,4 @@
-package engine
+package bom
 
 // BOM Mongodb query builder of (go.mongodb.org/mongo-driver)
 
