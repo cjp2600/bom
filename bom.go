@@ -307,7 +307,7 @@ func (b *Bom) getSort(sort *Sort) (map[string]interface{}, bool) {
 			sortMap[strings.ToLower(sort.Field)] = 1
 			if len(sort.Type) > 0 {
 				if val, ok := mType[strings.ToLower(sort.Type)]; ok {
-					sortMap[strings.ToLower(sort.Type)] = val
+					sortMap[strings.ToLower(sort.Field)] = val
 				}
 			}
 			return sortMap, true
