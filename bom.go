@@ -359,6 +359,11 @@ func (b *Bom) InsertOne(document interface{}) (*mongo.InsertOneResult, error) {
 	return b.query().InsertOne(ctx, document)
 }
 
+func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, error) {
+	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	return b.query().InsertMany(ctx, documents)
+}
+
 func (b *Bom) FindOne(callback func(s *mongo.SingleResult) error) error {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
 	s := b.query().FindOne(ctx, b.getCondition())
