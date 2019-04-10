@@ -1,4 +1,4 @@
-package bom
+package engine
 
 // BOM Mongodb query builder of (go.mongodb.org/mongo-driver)
 
@@ -9,24 +9,26 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"math"
+	"reflect"
 	"strings"
 	"time"
 )
 
 type (
 	Bom struct {
-		client          *mongo.Client
-		dbName          string
-		dbCollection    string
-		queryTimeout    time.Duration
-		condition       interface{}
-		whereConditions []map[string]interface{}
-		orConditions    []map[string]interface{}
-		inConditions    []map[string]interface{}
-		notConditions   []map[string]interface{}
-		pagination      *Pagination
-		limit           *Limit
-		sort            *Sort
+		client           *mongo.Client
+		dbName           string
+		dbCollection     string
+		queryTimeout     time.Duration
+		condition        interface{}
+		skipWhenUpdating map[string]bool
+		whereConditions  []map[string]interface{}
+		orConditions     []map[string]interface{}
+		inConditions     []map[string]interface{}
+		notConditions    []map[string]interface{}
+		pagination       *Pagination
+		limit            *Limit
+		sort             *Sort
 	}
 	Pagination struct {
 		TotalCount  int32
@@ -52,16 +54,19 @@ const (
 )
 
 var (
-	mType = map[string]int32{"asc": 1, "desc": -1}
+	mType            = map[string]int32{"asc": 1, "desc": -1}
+	skipWhenUpdating = map[string]bool{"id": true, "createdat": true, "updatedat": true}
 )
 
 func New(options ...Option) (*Bom, error) {
 	b := &Bom{
 		queryTimeout: DefaultQueryTimeout,
 		pagination: &Pagination{
-			Size: DefaultSize,
+			Size:        DefaultSize,
+			CurrentPage: 1,
 		},
-		limit: &Limit{Page: 1, Size: DefaultSize},
+		skipWhenUpdating: skipWhenUpdating,
+		limit:            &Limit{Page: 1, Size: DefaultSize},
 	}
 	for _, option := range options {
 		if err := option(b); err != nil {
@@ -98,6 +103,13 @@ func SetMongoClient(client *mongo.Client) Option {
 func SetDatabaseName(dbName string) Option {
 	return func(b *Bom) error {
 		b.dbName = dbName
+		return nil
+	}
+}
+
+func SetSkipWhenUpdating(fieldsMap map[string]bool) Option {
+	return func(b *Bom) error {
+		b.skipWhenUpdating = fieldsMap
 		return nil
 	}
 }
@@ -220,6 +232,61 @@ func (b *Bom) getPagination(total int32, page int32, size int32) *Pagination {
 	return b.pagination
 }
 
+func (b *Bom) readFieldName(f reflect.StructField) string {
+	val, ok := f.Tag.Lookup("json")
+	if !ok {
+		return strings.ToLower(f.Name)
+	}
+	opts := strings.Split(val, ",")
+	return strings.ToLower(opts[0])
+}
+
+func (b *Bom) structToMap(i interface{}) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+	v := reflect.ValueOf(i)
+	t := v.Type()
+	if t.Kind() != reflect.Struct {
+		return result, fmt.Errorf("type %s is not supported", t.Kind())
+	}
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if f.PkgPath != "" {
+			continue
+		}
+		if val, exist := f.Tag.Lookup("update"); exist {
+			if strings.ToLower(val) != "true" {
+				continue
+			}
+		} else {
+			continue
+		}
+
+		fv := v.Field(i)
+		key := b.readFieldName(f)
+		tp := fv.Type().String()
+
+		value := fv.Interface()
+		switch tp {
+		case "string":
+			value = fv.String()
+			if fv.String() == "" {
+				continue
+			}
+		case "interface {}":
+			value = fv.Interface()
+		case "int", "int8", "int16", "int32", "int64":
+			value = fv.Int()
+		case "float64", "float32":
+			value = fv.Float()
+		}
+
+		if _, ok := b.skipWhenUpdating[key]; !ok {
+			result[key] = value
+		}
+	}
+	return result, nil
+}
+
 func (b *Bom) calculateOffset(page, size int32) (limit int32, offset int32) {
 	limit = b.limit.Size
 	if page == 0 {
@@ -262,7 +329,26 @@ func (b *Bom) getCondition() interface{} {
 	return primitive.M{}
 }
 
-func (b *Bom) UpdateOne(update interface{}) (*mongo.UpdateResult, error) {
+func (b *Bom) Update(entity interface{}) (*mongo.UpdateResult, error) {
+	mp, _ := b.structToMap(entity)
+	var eRes []primitive.E
+	if len(mp) > 0 {
+		for key, val := range mp {
+			if val != nil {
+				eRes = append(eRes, primitive.E{Key: key, Value: val})
+			}
+		}
+	}
+
+	upResult := primitive.D{
+		{"$set", eRes},
+		{"$currentDate", primitive.D{{"updatedat", true}}},
+	}
+
+	return b.UpdateRaw(upResult)
+}
+
+func (b *Bom) UpdateRaw(update interface{}) (*mongo.UpdateResult, error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
 	res, err := b.query().UpdateOne(ctx, b.getCondition(), update)
 	return res, err
@@ -282,6 +368,11 @@ func (b *Bom) FindOne(callback func(s *mongo.SingleResult) error) error {
 func (b *Bom) FindOneAndDelete() *mongo.SingleResult {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
 	return b.query().FindOneAndDelete(ctx, b.getCondition())
+}
+
+func (b *Bom) DeleteMany() (*mongo.DeleteResult, error) {
+	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	return b.query().DeleteMany(ctx, b.getCondition())
 }
 
 func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pagination, error) {
