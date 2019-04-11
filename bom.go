@@ -149,7 +149,12 @@ func (b *Bom) WithCondition(condition interface{}) *Bom {
 }
 
 func (b *Bom) WithLimit(limit *Limit) *Bom {
-	b.limit = limit
+	if limit.Page > 0 {
+		b.limit.Page = limit.Page
+	}
+	if limit.Size > 0 {
+		b.limit.Size = limit.Size
+	}
 	return b
 }
 
