@@ -169,6 +169,13 @@ func (b *Bom) WithSort(sort *Sort) *Bom {
 	return b
 }
 
+func (b *Bom) WithSize(size int32) *Bom {
+	if size > 0 {
+		b.limit.Size = size
+	}
+	return b
+}
+
 //Deprecated: should use WhereConditions or WhereEq
 func (b *Bom) Where(field string, value interface{}) *Bom {
 	b = b.WhereConditions(field, "=", value)
