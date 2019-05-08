@@ -29,6 +29,7 @@ type (
 		pagination       *Pagination
 		limit            *Limit
 		sort             *Sort
+		lastId           string
 	}
 	Pagination struct {
 		TotalCount  int32
@@ -158,13 +159,35 @@ func (b *Bom) WithLimit(limit *Limit) *Bom {
 	return b
 }
 
+func (b *Bom) WithLastId(lastId string) *Bom {
+	b.lastId = lastId
+	return b
+}
+
 func (b *Bom) WithSort(sort *Sort) *Bom {
 	b.sort = sort
 	return b
 }
 
+//Deprecated: Drivers should implement WhereConditions instead
 func (b *Bom) Where(field string, value interface{}) *Bom {
-	b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": value})
+	b = b.WhereConditions(field, "=", value)
+	return b
+}
+
+func (b *Bom) WhereConditions(field string, conditions string, value interface{}) *Bom {
+	switch conditions {
+	case ">":
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gt", Value: value}}})
+	case ">=":
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gte", Value: value}}})
+	case "<":
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gt", Value: value}}})
+	case "<=":
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gt", Value: value}}})
+	default:
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": value})
+	}
 	return b
 }
 
@@ -411,6 +434,43 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 	}
 	pagination := b.getPagination(int32(count), b.limit.Page, b.limit.Size)
 	return pagination, err
+}
+
+func (b *Bom) ListWithIdPagination(callback func(cursor *mongo.Cursor) error) (lastId string, err error) {
+	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	lastId = b.lastId
+	findOptions := options.Find()
+	findOptions.SetLimit(int64(b.limit.Size))
+	cur := &mongo.Cursor{}
+
+	if lastId != "" {
+		b.WhereConditions("_id", ">", ToObj(lastId))
+	}
+	cur, err = b.query().Find(ctx, b.getCondition(), findOptions)
+	if err != nil {
+		return "", err
+	}
+	defer cur.Close(ctx)
+
+	var lastElement primitive.ObjectID
+	for cur.Next(ctx) {
+		err = callback(cur)
+		lastElement = cur.Current.Lookup("_id").ObjectID()
+	}
+	if err := cur.Err(); err != nil {
+		return "", err
+	}
+
+	count, err := b.query().CountDocuments(ctx, b.getCondition())
+	if err != nil {
+		return "", err
+	}
+
+	if count > int64(b.limit.Size) {
+		return lastElement.Hex(), err
+	} else {
+		return "", err
+	}
 }
 
 func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
