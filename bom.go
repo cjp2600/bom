@@ -503,7 +503,7 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 	return pagination, err
 }
 
-func (b *Bom) ListWithIdPagination(callback func(cursor *mongo.Cursor) error) (lastId string, err error) {
+func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId string, err error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
 	lastId = b.lastId
 	findOptions := options.Find()
