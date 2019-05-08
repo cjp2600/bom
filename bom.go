@@ -169,9 +169,34 @@ func (b *Bom) WithSort(sort *Sort) *Bom {
 	return b
 }
 
-//Deprecated: Drivers should implement WhereConditions instead
+//Deprecated: should use WhereConditions or WhereEq
 func (b *Bom) Where(field string, value interface{}) *Bom {
 	b = b.WhereConditions(field, "=", value)
+	return b
+}
+
+func (b *Bom) WhereEq(field string, value interface{}) *Bom {
+	b = b.WhereConditions(field, "=", value)
+	return b
+}
+
+func (b *Bom) WhereGt(field string, value interface{}) *Bom {
+	b = b.WhereConditions(field, ">", value)
+	return b
+}
+
+func (b *Bom) WhereGte(field string, value interface{}) *Bom {
+	b = b.WhereConditions(field, ">=", value)
+	return b
+}
+
+func (b *Bom) WhereLt(field string, value interface{}) *Bom {
+	b = b.WhereConditions(field, "<", value)
+	return b
+}
+
+func (b *Bom) WhereLte(field string, value interface{}) *Bom {
+	b = b.WhereConditions(field, "<=", value)
 	return b
 }
 
@@ -182,12 +207,53 @@ func (b *Bom) WhereConditions(field string, conditions string, value interface{}
 	case ">=":
 		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gte", Value: value}}})
 	case "<":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gt", Value: value}}})
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lt", Value: value}}})
 	case "<=":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gt", Value: value}}})
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lte", Value: value}}})
 	default:
 		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": value})
 	}
+	return b
+}
+
+func (b *Bom) OrWhereConditions(field string, conditions string, value interface{}) *Bom {
+	switch conditions {
+	case ">":
+		b.whereConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gt", Value: value}}})
+	case ">=":
+		b.whereConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gte", Value: value}}})
+	case "<":
+		b.whereConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lt", Value: value}}})
+	case "<=":
+		b.whereConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lte", Value: value}}})
+	default:
+		b.whereConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": value})
+	}
+	return b
+}
+
+func (b *Bom) OrWhereEq(field string, value interface{}) *Bom {
+	b = b.OrWhereConditions(field, "=", value)
+	return b
+}
+
+func (b *Bom) OrWhereGt(field string, value interface{}) *Bom {
+	b = b.OrWhereConditions(field, ">", value)
+	return b
+}
+
+func (b *Bom) OrWhereGte(field string, value interface{}) *Bom {
+	b = b.OrWhereConditions(field, ">=", value)
+	return b
+}
+
+func (b *Bom) OrWhereLt(field string, value interface{}) *Bom {
+	b = b.OrWhereConditions(field, "<", value)
+	return b
+}
+
+func (b *Bom) OrWhereLte(field string, value interface{}) *Bom {
+	b = b.OrWhereConditions(field, "<=", value)
 	return b
 }
 
@@ -201,8 +267,9 @@ func (b *Bom) InWhere(field string, value interface{}) *Bom {
 	return b
 }
 
+//Deprecated: should use OrWhereConditions or OrWhereEq
 func (b *Bom) OrWhere(field string, value interface{}) *Bom {
-	b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": value})
+	b.OrWhereEq(field, value)
 	return b
 }
 
