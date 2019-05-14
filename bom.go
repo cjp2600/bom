@@ -1,6 +1,6 @@
 package bom
 
-// BOM Mongodb query builder of (go.mongodb.org/mongo-driver)
+// BOM Mongodb Mongo builder of (go.mongodb.org/mongo-driver)
 
 import (
 	"context"
@@ -310,7 +310,7 @@ func (b *Bom) buildCondition() interface{} {
 	return result
 }
 
-func (b *Bom) query() *mongo.Collection {
+func (b *Bom) Mongo() *mongo.Collection {
 	return b.client.Database(b.dbName).Collection(b.dbCollection)
 }
 
@@ -452,34 +452,34 @@ func (b *Bom) Update(entity interface{}) (*mongo.UpdateResult, error) {
 
 func (b *Bom) UpdateRaw(update interface{}) (*mongo.UpdateResult, error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	res, err := b.query().UpdateOne(ctx, b.getCondition(), update)
+	res, err := b.Mongo().UpdateOne(ctx, b.getCondition(), update)
 	return res, err
 }
 
 func (b *Bom) InsertOne(document interface{}) (*mongo.InsertOneResult, error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	return b.query().InsertOne(ctx, document)
+	return b.Mongo().InsertOne(ctx, document)
 }
 
 func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	return b.query().InsertMany(ctx, documents)
+	return b.Mongo().InsertMany(ctx, documents)
 }
 
 func (b *Bom) FindOne(callback func(s *mongo.SingleResult) error) error {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	s := b.query().FindOne(ctx, b.getCondition())
+	s := b.Mongo().FindOne(ctx, b.getCondition())
 	return callback(s)
 }
 
 func (b *Bom) FindOneAndDelete() *mongo.SingleResult {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	return b.query().FindOneAndDelete(ctx, b.getCondition())
+	return b.Mongo().FindOneAndDelete(ctx, b.getCondition())
 }
 
 func (b *Bom) DeleteMany() (*mongo.DeleteResult, error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	return b.query().DeleteMany(ctx, b.getCondition())
+	return b.Mongo().DeleteMany(ctx, b.getCondition())
 }
 
 func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pagination, error) {
@@ -491,11 +491,11 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 		findOptions.SetSort(sm)
 	}
 	condition := b.getCondition()
-	count, err := b.query().CountDocuments(ctx, condition)
+	count, err := b.Mongo().CountDocuments(ctx, condition)
 	if err != nil {
 		return &Pagination{}, err
 	}
-	cur, err := b.query().Find(ctx, condition, findOptions)
+	cur, err := b.Mongo().Find(ctx, condition, findOptions)
 	if err != nil {
 		return &Pagination{}, err
 	}
@@ -520,7 +520,7 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 	if lastId != "" {
 		b.WhereConditions("_id", ">", ToObj(lastId))
 	}
-	cur, err = b.query().Find(ctx, b.getCondition(), findOptions)
+	cur, err = b.Mongo().Find(ctx, b.getCondition(), findOptions)
 	if err != nil {
 		return "", err
 	}
@@ -535,7 +535,7 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 		return "", err
 	}
 
-	count, err := b.query().CountDocuments(ctx, b.getCondition())
+	count, err := b.Mongo().CountDocuments(ctx, b.getCondition())
 	if err != nil {
 		return "", err
 	}
@@ -549,7 +549,7 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 
 func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	cur, err := b.query().Find(ctx, b.getCondition())
+	cur, err := b.Mongo().Find(ctx, b.getCondition())
 	if err != nil {
 		return err
 	}
