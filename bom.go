@@ -226,15 +226,15 @@ func (b *Bom) WhereConditions(field string, conditions string, value interface{}
 func (b *Bom) OrWhereConditions(field string, conditions string, value interface{}) *Bom {
 	switch conditions {
 	case ">":
-		b.whereConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gt", Value: value}}})
+		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gt", Value: value}}})
 	case ">=":
-		b.whereConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gte", Value: value}}})
+		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gte", Value: value}}})
 	case "<":
-		b.whereConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lt", Value: value}}})
+		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lt", Value: value}}})
 	case "<=":
-		b.whereConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lte", Value: value}}})
+		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lte", Value: value}}})
 	default:
-		b.whereConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": value})
+		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": value})
 	}
 	return b
 }
