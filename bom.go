@@ -25,6 +25,7 @@ type (
 		whereConditions  []map[string]interface{}
 		orConditions     []map[string]interface{}
 		inConditions     []map[string]interface{}
+		notInConditions  []map[string]interface{}
 		notConditions    []map[string]interface{}
 		pagination       *Pagination
 		limit            *Limit
@@ -274,6 +275,11 @@ func (b *Bom) InWhere(field string, value interface{}) *Bom {
 	return b
 }
 
+func (b *Bom) NotInWhere(field string, value interface{}) *Bom {
+	b.notInConditions = append(b.notInConditions, map[string]interface{}{"field": field, "value": value})
+	return b
+}
+
 //Deprecated: should use OrWhereConditions or OrWhereEq
 func (b *Bom) OrWhere(field string, value interface{}) *Bom {
 	b.OrWhereEq(field, value)
@@ -305,6 +311,13 @@ func (b *Bom) buildCondition() interface{} {
 			field := cnd["field"]
 			value := cnd["value"]
 			result[field.(string)] = primitive.M{"$in": value}
+		}
+	}
+	if len(b.notInConditions) > 0 {
+		for _, cnd := range b.notInConditions {
+			field := cnd["field"]
+			value := cnd["value"]
+			result[field.(string)] = primitive.M{"$nin": value}
 		}
 	}
 	return result
