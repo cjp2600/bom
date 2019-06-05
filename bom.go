@@ -16,21 +16,25 @@ import (
 
 type (
 	Bom struct {
-		client           *mongo.Client
-		dbName           string
-		dbCollection     string
-		queryTimeout     time.Duration
-		condition        interface{}
-		skipWhenUpdating map[string]bool
-		whereConditions  []map[string]interface{}
-		orConditions     []map[string]interface{}
-		inConditions     []map[string]interface{}
-		notInConditions  []map[string]interface{}
-		notConditions    []map[string]interface{}
-		pagination       *Pagination
-		limit            *Limit
-		sort             *Sort
-		lastId           string
+		client                  *mongo.Client
+		dbName                  string
+		dbCollection            string
+		queryTimeout            time.Duration
+		condition               interface{}
+		skipWhenUpdating        map[string]bool
+		whereConditions         []map[string]interface{}
+		orConditions            []map[string]interface{}
+		inConditions            []map[string]interface{}
+		notInConditions         []map[string]interface{}
+		notConditions           []map[string]interface{}
+		updateOptions           []*options.UpdateOptions
+		insertOptions           []*options.InsertOneOptions
+		findOneOptions          []*options.FindOneOptions
+		findOneAndUpdateOptions []*options.FindOneAndUpdateOptions
+		pagination              *Pagination
+		limit                   *Limit
+		sort                    *Sort
+		lastId                  string
 	}
 	Pagination struct {
 		TotalCount  int32
@@ -236,6 +240,34 @@ func (b *Bom) OrWhereConditions(field string, conditions string, value interface
 		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lte", Value: value}}})
 	default:
 		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": value})
+	}
+	return b
+}
+
+func (b *Bom) SetUpdateOptions(opts ...*options.UpdateOptions) *Bom {
+	for _, value := range opts {
+		b.updateOptions = append(b.updateOptions, value)
+	}
+	return b
+}
+
+func (b *Bom) SetInsertOptions(opts ...*options.InsertOneOptions) *Bom {
+	for _, value := range opts {
+		b.insertOptions = append(b.insertOptions, value)
+	}
+	return b
+}
+
+func (b *Bom) SetFindOneOptions(opts ...*options.FindOneOptions) *Bom {
+	for _, value := range opts {
+		b.findOneOptions = append(b.findOneOptions, value)
+	}
+	return b
+}
+
+func (b *Bom) SetFindOnEndUpdateOptions(opts ...*options.FindOneAndUpdateOptions) *Bom {
+	for _, value := range opts {
+		b.findOneAndUpdateOptions = append(b.findOneAndUpdateOptions, value)
 	}
 	return b
 }
@@ -465,13 +497,13 @@ func (b *Bom) Update(entity interface{}) (*mongo.UpdateResult, error) {
 
 func (b *Bom) UpdateRaw(update interface{}) (*mongo.UpdateResult, error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	res, err := b.Mongo().UpdateOne(ctx, b.getCondition(), update)
+	res, err := b.Mongo().UpdateOne(ctx, b.getCondition(), update, b.updateOptions...)
 	return res, err
 }
 
 func (b *Bom) InsertOne(document interface{}) (*mongo.InsertOneResult, error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	return b.Mongo().InsertOne(ctx, document)
+	return b.Mongo().InsertOne(ctx, document, b.insertOptions...)
 }
 
 func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, error) {
@@ -481,8 +513,13 @@ func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, erro
 
 func (b *Bom) FindOne(callback func(s *mongo.SingleResult) error) error {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	s := b.Mongo().FindOne(ctx, b.getCondition())
+	s := b.Mongo().FindOne(ctx, b.getCondition(), b.findOneOptions...)
 	return callback(s)
+}
+
+func (b *Bom) FindOneAndUpdate(update interface{}) *mongo.SingleResult {
+	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	return b.Mongo().FindOneAndUpdate(ctx, b.getCondition(), update, b.findOneAndUpdateOptions...)
 }
 
 func (b *Bom) FindOneAndDelete() *mongo.SingleResult {
