@@ -192,6 +192,11 @@ func (b *Bom) WhereEq(field string, value interface{}) *Bom {
 	return b
 }
 
+func (b *Bom) WhereNotEq(field string, value interface{}) *Bom {
+	b = b.WhereConditions(field, "!=", value)
+	return b
+}
+
 func (b *Bom) WhereGt(field string, value interface{}) *Bom {
 	b = b.WhereConditions(field, ">", value)
 	return b
@@ -222,6 +227,8 @@ func (b *Bom) WhereConditions(field string, conditions string, value interface{}
 		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lt", Value: value}}})
 	case "<=":
 		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lte", Value: value}}})
+	case "!=":
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$ne", Value: value}}})
 	default:
 		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": value})
 	}
