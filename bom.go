@@ -4,14 +4,17 @@ package bom
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"math"
 	"reflect"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type (
@@ -483,6 +486,7 @@ func (b *Bom) getCondition() interface{} {
 	return primitive.M{}
 }
 
+//Deprecated: method works not correctly user bom generator (https://github.com/cjp2600/protoc-gen-bom)
 func (b *Bom) Update(entity interface{}) (*mongo.UpdateResult, error) {
 	mp, _ := b.structToMap(entity)
 	var eRes []primitive.E
@@ -510,11 +514,36 @@ func (b *Bom) UpdateRaw(update interface{}) (*mongo.UpdateResult, error) {
 
 func (b *Bom) InsertOne(document interface{}) (*mongo.InsertOneResult, error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	return b.Mongo().InsertOne(ctx, document, b.insertOptions...)
+	bsonDocument, err := b.convertJsonToBson(document)
+	if err != nil {
+		return nil, err
+	}
+	return b.Mongo().InsertOne(ctx, bsonDocument, b.insertOptions...)
+}
+
+func (b *Bom) convertJsonToBson(document interface{}) (interface{}, error) {
+	bytes, err := json.Marshal(document)
+	if err != nil {
+		return nil, err
+	}
+	var bsonDocument interface{}
+	err = bson.UnmarshalExtJSON(bytes, true, &bsonDocument)
+	if err != nil {
+		return nil, err
+	}
+	return bsonDocument, nil
 }
 
 func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	var bsonDocuments []interface{}
+	for _, document := range documents {
+		bsonDocument, err := b.convertJsonToBson(document)
+		if err != nil {
+			return nil, err
+		}
+		bsonDocuments = append(bsonDocuments, bsonDocument)
+	}
 	return b.Mongo().InsertMany(ctx, documents)
 }
 
