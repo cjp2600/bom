@@ -514,14 +514,10 @@ func (b *Bom) UpdateRaw(update interface{}) (*mongo.UpdateResult, error) {
 
 func (b *Bom) InsertOne(document interface{}) (*mongo.InsertOneResult, error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	bsonDocument, err := b.convertJsonToBson(document)
-	if err != nil {
-		return nil, err
-	}
-	return b.Mongo().InsertOne(ctx, bsonDocument, b.insertOptions...)
+	return b.Mongo().InsertOne(ctx, document, b.insertOptions...)
 }
 
-func (b *Bom) convertJsonToBson(document interface{}) (interface{}, error) {
+func (b *Bom) ConvertJsonToBson(document interface{}) (interface{}, error) {
 	bytes, err := json.Marshal(document)
 	if err != nil {
 		return nil, err
@@ -538,11 +534,7 @@ func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, erro
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
 	var bsonDocuments []interface{}
 	for _, document := range documents {
-		bsonDocument, err := b.convertJsonToBson(document)
-		if err != nil {
-			return nil, err
-		}
-		bsonDocuments = append(bsonDocuments, bsonDocument)
+		bsonDocuments = append(bsonDocuments, document)
 	}
 	return b.Mongo().InsertMany(ctx, documents)
 }
