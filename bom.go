@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -569,10 +570,17 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 		findOptions.SetSort(sm)
 	}
 	condition := b.getCondition()
+
+	var count int64
+	var err error
 	if condition != nil {
-		count, err := b.Mongo().CountDocuments(ctx, condition)
-	} else {
-		count, err := b.Mongo().EstimatedDocumentCount(ctx)
+		if bs, ok := condition.(primitive.M); ok {
+			if len(bs) > 0{
+				count, err = b.Mongo().CountDocuments(ctx, condition)
+			} else {
+				count, err = b.Mongo().EstimatedDocumentCount(ctx)
+			}
+		}
 	}
 
 	if err != nil {
