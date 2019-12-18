@@ -569,7 +569,12 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 		findOptions.SetSort(sm)
 	}
 	condition := b.getCondition()
-	count, err := b.Mongo().CountDocuments(ctx, condition)
+	if condition != nil {
+		count, err := b.Mongo().CountDocuments(ctx, condition)
+	} else {
+		count, err := b.Mongo().EstimatedDocumentCount(ctx)
+	}
+
 	if err != nil {
 		return &Pagination{}, err
 	}
