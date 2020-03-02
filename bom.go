@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -37,7 +36,7 @@ type (
 		findOneAndUpdateOptions []*options.FindOneAndUpdateOptions
 		pagination              *Pagination
 		limit                   *Limit
-		sort                    *Sort
+		sort                    []*Sort
 		lastId                  string
 	}
 	Pagination struct {
@@ -174,7 +173,7 @@ func (b *Bom) WithLastId(lastId string) *Bom {
 }
 
 func (b *Bom) WithSort(sort *Sort) *Bom {
-	b.sort = sort
+	b.sort = append(b.sort, sort)
 	return b
 }
 
@@ -458,17 +457,19 @@ func (b *Bom) calculateOffset(page, size int32) (limit int32, offset int32) {
 	return
 }
 
-func (b *Bom) getSort(sort *Sort) (map[string]interface{}, bool) {
+func (b *Bom) getSort(sort ...*Sort) (map[string]interface{}, bool) {
 	sortMap := make(map[string]interface{})
-	if sort != nil {
-		if len(sort.Field) > 0 {
-			sortMap[strings.ToLower(sort.Field)] = 1
-			if len(sort.Type) > 0 {
-				if val, ok := mType[strings.ToLower(sort.Type)]; ok {
-					sortMap[strings.ToLower(sort.Field)] = val
+	if len(sort) > 0 {
+		for _, s := range sort {
+			if len(s.Field) > 0 {
+				sortMap[strings.ToLower(s.Field)] = 1
+				if len(s.Type) > 0 {
+					if val, ok := mType[strings.ToLower(s.Type)]; ok {
+						sortMap[strings.ToLower(s.Field)] = val
+					}
 				}
+				return sortMap, true
 			}
-			return sortMap, true
 		}
 	}
 	return sortMap, false
@@ -566,7 +567,7 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 	findOptions := options.Find()
 	limit, offset := b.calculateOffset(b.limit.Page, b.limit.Size)
 	findOptions.SetLimit(int64(limit)).SetSkip(int64(offset))
-	if sm, ok := b.getSort(b.sort); ok {
+	if sm, ok := b.getSort(b.sort...); ok {
 		findOptions.SetSort(sm)
 	}
 	condition := b.getCondition()
@@ -575,7 +576,7 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 	var err error
 	if condition != nil {
 		if bs, ok := condition.(primitive.M); ok {
-			if len(bs) > 0{
+			if len(bs) > 0 {
 				count, err = b.Mongo().CountDocuments(ctx, condition)
 			} else {
 				count, err = b.Mongo().EstimatedDocumentCount(ctx)
@@ -606,6 +607,9 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 	lastId = b.lastId
 	findOptions := options.Find()
 	findOptions.SetLimit(int64(b.limit.Size))
+	if sm, ok := b.getSort(b.sort...); ok {
+		findOptions.SetSort(sm)
+	}
 	cur := &mongo.Cursor{}
 
 	if lastId != "" {
@@ -640,7 +644,12 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 
 func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
-	cur, err := b.Mongo().Find(ctx, b.getCondition())
+	findOptions := options.Find()
+	findOptions.SetLimit(int64(b.limit.Size))
+	if sm, ok := b.getSort(b.sort...); ok {
+		findOptions.SetSort(sm)
+	}
+	cur, err := b.Mongo().Find(ctx, b.getCondition(), findOptions)
 	if err != nil {
 		return err
 	}
