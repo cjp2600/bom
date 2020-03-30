@@ -30,6 +30,7 @@ type (
 		inConditions            []map[string]interface{}
 		notInConditions         []map[string]interface{}
 		notConditions           []map[string]interface{}
+		aggregateOptions        []*options.AggregateOptions
 		updateOptions           []*options.UpdateOptions
 		insertOptions           []*options.InsertOneOptions
 		findOneOptions          []*options.FindOneOptions
@@ -38,6 +39,8 @@ type (
 		limit                   *Limit
 		sort                    []*Sort
 		lastId                  string
+		useAggrigate            bool
+		selectArg               []string
 	}
 	Pagination struct {
 		TotalCount  int32
@@ -220,6 +223,12 @@ func (b *Bom) WhereLte(field string, value interface{}) *Bom {
 	return b
 }
 
+func (b *Bom) Select(arg ...string) *Bom {
+	b.useAggrigate = true
+	b.selectArg = arg
+	return b
+}
+
 func (b *Bom) WhereConditions(field string, conditions string, value interface{}) *Bom {
 	switch conditions {
 	case ">":
@@ -258,6 +267,11 @@ func (b *Bom) SetUpdateOptions(opts ...*options.UpdateOptions) *Bom {
 	for _, value := range opts {
 		b.updateOptions = append(b.updateOptions, value)
 	}
+	return b
+}
+
+func (b *Bom) SetAggrigateOptions(opts ...*options.AggregateOptions) *Bom {
+	b.aggregateOptions = opts
 	return b
 }
 
@@ -326,6 +340,17 @@ func (b *Bom) NotInWhere(field string, value interface{}) *Bom {
 func (b *Bom) OrWhere(field string, value interface{}) *Bom {
 	b.OrWhereEq(field, value)
 	return b
+}
+
+func (b *Bom) buildProjection() (interface{}, bool) {
+	var result = make(primitive.M)
+	for _, item := range b.selectArg {
+		result[item] = 1
+	}
+	if len(result) > 0 {
+		return result, true
+	}
+	return nil, false
 }
 
 func (b *Bom) buildCondition() interface{} {
@@ -457,15 +482,15 @@ func (b *Bom) calculateOffset(page, size int32) (limit int32, offset int32) {
 	return
 }
 
-func (b *Bom) getSort(sort ...*Sort) (map[string]interface{}, bool) {
+func (b *Bom) getSort(sorts []*Sort) (map[string]interface{}, bool) {
 	sortMap := make(map[string]interface{})
-	if len(sort) > 0 {
-		for _, s := range sort {
-			if len(s.Field) > 0 {
-				sortMap[strings.ToLower(s.Field)] = 1
-				if len(s.Type) > 0 {
-					if val, ok := mType[strings.ToLower(s.Type)]; ok {
-						sortMap[strings.ToLower(s.Field)] = val
+	if len(sorts) > 0 {
+		for _, sort := range sorts {
+			if len(sort.Field) > 0 {
+				sortMap[strings.ToLower(sort.Field)] = 1
+				if len(sort.Type) > 0 {
+					if val, ok := mType[strings.ToLower(sort.Type)]; ok {
+						sortMap[strings.ToLower(sort.Field)] = val
 					}
 				}
 				return sortMap, true
@@ -567,10 +592,13 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 	findOptions := options.Find()
 	limit, offset := b.calculateOffset(b.limit.Page, b.limit.Size)
 	findOptions.SetLimit(int64(limit)).SetSkip(int64(offset))
-	if sm, ok := b.getSort(b.sort...); ok {
+	if sm, ok := b.getSort(b.sort); ok {
 		findOptions.SetSort(sm)
 	}
 	condition := b.getCondition()
+	if projection, ok := b.buildProjection(); ok {
+		findOptions.SetProjection(projection)
+	}
 
 	var count int64
 	var err error
@@ -607,10 +635,10 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 	lastId = b.lastId
 	findOptions := options.Find()
 	findOptions.SetLimit(int64(b.limit.Size))
-	if sm, ok := b.getSort(b.sort...); ok {
-		findOptions.SetSort(sm)
-	}
 	cur := &mongo.Cursor{}
+	if projection, ok := b.buildProjection(); ok {
+		findOptions.SetProjection(projection)
+	}
 
 	if lastId != "" {
 		b.WhereConditions("_id", ">", ToObj(lastId))
@@ -645,11 +673,11 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
 	findOptions := options.Find()
-	findOptions.SetLimit(int64(b.limit.Size))
-	if sm, ok := b.getSort(b.sort...); ok {
-		findOptions.SetSort(sm)
+	if projection, ok := b.buildProjection(); ok {
+		findOptions.SetProjection(projection)
 	}
-	cur, err := b.Mongo().Find(ctx, b.getCondition(), findOptions)
+
+	cur, err := b.Mongo().Find(ctx, b.getCondition(),findOptions)
 	if err != nil {
 		return err
 	}
