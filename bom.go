@@ -40,7 +40,7 @@ type (
 		sort                    []*Sort
 		lastId                  string
 		useAggrigate            bool
-		selectArg               []string
+		selectArg               []interface{}
 	}
 	Pagination struct {
 		TotalCount  int32
@@ -56,8 +56,12 @@ type (
 		Page int32
 		Size int32
 	}
-	Size   int32
-	Option func(*Bom) error
+	Size      int32
+	Option    func(*Bom) error
+	ElemMatch struct {
+		Key string
+		Val interface{}
+	}
 )
 
 const (
@@ -89,6 +93,10 @@ func New(options ...Option) (*Bom, error) {
 		return nil, fmt.Errorf("mondodb client is required")
 	}
 	return b, nil
+}
+
+func ElMatch(key string, val interface{}) ElemMatch {
+	return ElemMatch{Key: key, Val: val}
 }
 
 func ToObj(id string) primitive.ObjectID {
@@ -222,8 +230,13 @@ func (b *Bom) WhereLte(field string, value interface{}) *Bom {
 	b = b.WhereConditions(field, "<=", value)
 	return b
 }
+func (b *Bom) AddSelect(arg interface{}) *Bom {
+	b.useAggrigate = true
+	b.selectArg = append(b.selectArg, arg)
+	return b
+}
 
-func (b *Bom) Select(arg ...string) *Bom {
+func (b *Bom) Select(arg ...interface{}) *Bom {
 	b.useAggrigate = true
 	b.selectArg = arg
 	return b
@@ -345,7 +358,16 @@ func (b *Bom) OrWhere(field string, value interface{}) *Bom {
 func (b *Bom) buildProjection() (interface{}, bool) {
 	var result = make(primitive.M)
 	for _, item := range b.selectArg {
-		result[item] = 1
+		switch v := item.(type) {
+		case string:
+			result[v] = 1
+		case ElemMatch:
+			if vo, ok := v.Val.(ElemMatch); ok {
+				var sub = make(primitive.M)
+				sub["$elemMatch"] = primitive.M{vo.Key: vo.Val}
+				result[v.Key] = sub
+			}
+		}
 	}
 	if len(result) > 0 {
 		return result, true
@@ -677,7 +699,7 @@ func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
 		findOptions.SetProjection(projection)
 	}
 
-	cur, err := b.Mongo().Find(ctx, b.getCondition(),findOptions)
+	cur, err := b.Mongo().Find(ctx, b.getCondition(), findOptions)
 	if err != nil {
 		return err
 	}
