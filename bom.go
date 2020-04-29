@@ -30,6 +30,7 @@ type (
 		inConditions            []map[string]interface{}
 		notInConditions         []map[string]interface{}
 		notConditions           []map[string]interface{}
+		pipeline                AggregateStages
 		aggregateOptions        []*options.AggregateOptions
 		updateOptions           []*options.UpdateOptions
 		insertOptions           []*options.InsertOneOptions
@@ -195,6 +196,20 @@ func (b *Bom) WithSize(size int32) *Bom {
 	return b
 }
 
+func (b *Bom) FillPipeline(p ...Stager) {
+	if b.pipeline == nil {
+		b.pipeline = make(AggregateStages, 0)
+	}
+
+	for _, stage := range p {
+		if stage == nil {
+			continue
+		}
+
+		b.pipeline = append(b.pipeline, stage)
+	}
+}
+
 //Deprecated: should use WhereConditions or WhereEq
 func (b *Bom) Where(field string, value interface{}) *Bom {
 	b = b.WhereConditions(field, "=", value)
@@ -355,24 +370,65 @@ func (b *Bom) OrWhere(field string, value interface{}) *Bom {
 	return b
 }
 
-func (b *Bom) buildProjection() (interface{}, bool) {
-	var result = make(primitive.M)
-	for _, item := range b.selectArg {
-		switch v := item.(type) {
-		case string:
-			result[v] = 1
-		case ElemMatch:
-			if vo, ok := v.Val.(ElemMatch); ok {
-				var sub = make(primitive.M)
-				sub["$elemMatch"] = primitive.M{vo.Key: vo.Val}
-				result[v.Key] = sub
+func (b *Bom) AggregateWithPagination(callback func(c *mongo.Cursor) (int32, error)) (*Pagination, error) {
+	p := &Pagination{}
+
+	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	aggregateOpts := options.Aggregate()
+	aggregateOpts.SetAllowDiskUse(false)
+
+	facet := NewFacetStage()
+	limit, offset := b.calculateOffset(b.limit.Page, b.limit.Size)
+	facet.SetLimit(limit)
+	facet.SetSkip(offset)
+	if sm := b.getSort(); sm != nil {
+		facet.SetSort(sm)
+	}
+
+	b.FillPipeline(facet)
+
+	pipeline, err := b.pipeline.Aggregate()
+	if err != nil {
+		return p, err
+	}
+
+	cur, err := b.Mongo().Aggregate(ctx, pipeline, aggregateOpts)
+	if err != nil {
+		return &Pagination{}, err
+	}
+
+	defer cur.Close(ctx)
+
+	count := int32(0)
+	if count, err = callback(cur); err != nil {
+		return p, err
+	}
+
+	if err := cur.Err(); err != nil {
+		return p, err
+	}
+
+	return b.getPagination(count, b.limit.Page, b.limit.Size), err
+}
+
+func (b *Bom) BuildProjection() primitive.M {
+	var result primitive.M
+	if len(b.selectArg) > 0 {
+		result = make(primitive.M)
+		for _, item := range b.selectArg {
+			switch v := item.(type) {
+			case string:
+				result[v] = 1
+			case ElemMatch:
+				if vo, ok := v.Val.(ElemMatch); ok {
+					var sub = make(primitive.M)
+					sub["$elemMatch"] = primitive.M{vo.Key: vo.Val}
+					result[v.Key] = sub
+				}
 			}
 		}
 	}
-	if len(result) > 0 {
-		return result, true
-	}
-	return nil, false
+	return result
 }
 
 func (b *Bom) buildCondition() interface{} {
@@ -504,10 +560,11 @@ func (b *Bom) calculateOffset(page, size int32) (limit int32, offset int32) {
 	return
 }
 
-func (b *Bom) getSort(sorts []*Sort) (map[string]interface{}, bool) {
-	sortMap := make(map[string]interface{})
-	if len(sorts) > 0 {
-		for _, sort := range sorts {
+func (b *Bom) getSort() map[string]interface{} {
+	var sortMap map[string]interface{}
+	if len(b.sort) > 0 {
+		sortMap = make(map[string]interface{})
+		for _, sort := range b.sort {
 			if len(sort.Field) > 0 {
 				sortMap[strings.ToLower(sort.Field)] = 1
 				if len(sort.Type) > 0 {
@@ -515,11 +572,10 @@ func (b *Bom) getSort(sorts []*Sort) (map[string]interface{}, bool) {
 						sortMap[strings.ToLower(sort.Field)] = val
 					}
 				}
-				return sortMap, true
 			}
 		}
 	}
-	return sortMap, false
+	return sortMap
 }
 
 func (b *Bom) getCondition() interface{} {
@@ -613,12 +669,16 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
 	findOptions := options.Find()
 	limit, offset := b.calculateOffset(b.limit.Page, b.limit.Size)
+
 	findOptions.SetLimit(int64(limit)).SetSkip(int64(offset))
-	if sm, ok := b.getSort(b.sort); ok {
+
+	if sm := b.getSort(); sm != nil {
 		findOptions.SetSort(sm)
 	}
+
 	condition := b.getCondition()
-	if projection, ok := b.buildProjection(); ok {
+
+	if projection := b.BuildProjection(); projection != nil {
 		findOptions.SetProjection(projection)
 	}
 
@@ -655,27 +715,34 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId string, err error) {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
 	lastId = b.lastId
-	findOptions := options.Find()
-	findOptions.SetLimit(int64(b.limit.Size))
 	cur := &mongo.Cursor{}
-	if projection, ok := b.buildProjection(); ok {
+
+	defer cur.Close(ctx)
+
+	findOptions := options.Find()
+
+	findOptions.SetLimit(int64(b.limit.Size))
+
+	if projection := b.BuildProjection(); projection != nil {
 		findOptions.SetProjection(projection)
 	}
 
 	if lastId != "" {
 		b.WhereConditions("_id", ">", ToObj(lastId))
 	}
+
 	cur, err = b.Mongo().Find(ctx, b.getCondition(), findOptions)
 	if err != nil {
 		return "", err
 	}
-	defer cur.Close(ctx)
 
 	var lastElement primitive.ObjectID
+
 	for cur.Next(ctx) {
 		err = callback(cur)
 		lastElement = cur.Current.Lookup("_id").ObjectID()
 	}
+
 	if err := cur.Err(); err != nil {
 		return "", err
 	}
@@ -695,7 +762,7 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
 	findOptions := options.Find()
-	if projection, ok := b.buildProjection(); ok {
+	if projection := b.BuildProjection(); projection != nil {
 		findOptions.SetProjection(projection)
 	}
 
@@ -703,12 +770,16 @@ func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
 	if err != nil {
 		return err
 	}
+
 	defer cur.Close(ctx)
+
 	for cur.Next(ctx) {
 		err = callback(cur)
 	}
+
 	if err := cur.Err(); err != nil {
 		return err
 	}
+
 	return err
 }
