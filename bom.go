@@ -379,7 +379,7 @@ func (b *Bom) AggregateWithPagination(callback func(c *mongo.Cursor) (int32, err
 
 	facet := NewFacetStage()
 	limit, offset := b.calculateOffset(b.limit.Page, b.limit.Size)
-	facet.SetLimit(limit)
+	facet.SetLimit(limit + offset)
 	facet.SetSkip(offset)
 	if sm := b.getSort(); sm != nil {
 		facet.SetSort(sm)
