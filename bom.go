@@ -373,7 +373,7 @@ func (b *Bom) OrWhere(field string, value interface{}) *Bom {
 func (b *Bom) AggregateWithPagination(callback func(c *mongo.Cursor) (int32, error)) (*Pagination, error) {
 	p := &Pagination{}
 
-	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
 	aggregateOpts := options.Aggregate()
 	aggregateOpts.SetAllowDiskUse(false)
 
@@ -612,13 +612,13 @@ func (b *Bom) Update(entity interface{}) (*mongo.UpdateResult, error) {
 }
 
 func (b *Bom) UpdateRaw(update interface{}) (*mongo.UpdateResult, error) {
-	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
 	res, err := b.Mongo().UpdateOne(ctx, b.getCondition(), update, b.updateOptions...)
 	return res, err
 }
 
 func (b *Bom) InsertOne(document interface{}) (*mongo.InsertOneResult, error) {
-	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
 	return b.Mongo().InsertOne(ctx, document, b.insertOptions...)
 }
 
@@ -636,7 +636,7 @@ func (b *Bom) ConvertJsonToBson(document interface{}) (interface{}, error) {
 }
 
 func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, error) {
-	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
 	var bsonDocuments []interface{}
 	for _, document := range documents {
 		bsonDocuments = append(bsonDocuments, document)
@@ -645,28 +645,28 @@ func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, erro
 }
 
 func (b *Bom) FindOne(callback func(s *mongo.SingleResult) error) error {
-	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
 	s := b.Mongo().FindOne(ctx, b.getCondition(), b.findOneOptions...)
 	return callback(s)
 }
 
 func (b *Bom) FindOneAndUpdate(update interface{}) *mongo.SingleResult {
-	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
 	return b.Mongo().FindOneAndUpdate(ctx, b.getCondition(), update, b.findOneAndUpdateOptions...)
 }
 
 func (b *Bom) FindOneAndDelete() *mongo.SingleResult {
-	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
 	return b.Mongo().FindOneAndDelete(ctx, b.getCondition())
 }
 
 func (b *Bom) DeleteMany() (*mongo.DeleteResult, error) {
-	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
 	return b.Mongo().DeleteMany(ctx, b.getCondition())
 }
 
 func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pagination, error) {
-	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
 	findOptions := options.Find()
 	limit, offset := b.calculateOffset(b.limit.Page, b.limit.Size)
 
@@ -713,7 +713,7 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 }
 
 func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId string, err error) {
-	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
 	lastId = b.lastId
 	cur := &mongo.Cursor{}
 
@@ -760,7 +760,7 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 }
 
 func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
-	ctx, _ := context.WithTimeout(context.Background(), DefaultQueryTimeout)
+	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
 	findOptions := options.Find()
 	if projection := b.BuildProjection(); projection != nil {
 		findOptions.SetProjection(projection)
