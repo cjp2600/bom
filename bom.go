@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"reflect"
 	"strings"
 	"time"
 
@@ -260,15 +259,15 @@ func (b *Bom) Select(arg ...interface{}) *Bom {
 func (b *Bom) WhereConditions(field string, conditions string, value interface{}) *Bom {
 	switch conditions {
 	case ">":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gt", Value: value}}})
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: GreaterConditionOperator, Value: value}}})
 	case ">=":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gte", Value: value}}})
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: GreaterOrEqualConditionOperator, Value: value}}})
 	case "<":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lt", Value: value}}})
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: LessConditionOperator, Value: value}}})
 	case "<=":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lte", Value: value}}})
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: LessOrEqualConditionOperator, Value: value}}})
 	case "!=":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$ne", Value: value}}})
+		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: NotEqualConditionOperator, Value: value}}})
 	default:
 		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": value})
 	}
@@ -278,13 +277,15 @@ func (b *Bom) WhereConditions(field string, conditions string, value interface{}
 func (b *Bom) OrWhereConditions(field string, conditions string, value interface{}) *Bom {
 	switch conditions {
 	case ">":
-		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gt", Value: value}}})
+		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: GreaterConditionOperator, Value: value}}})
 	case ">=":
-		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$gte", Value: value}}})
+		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: GreaterOrEqualConditionOperator, Value: value}}})
 	case "<":
-		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lt", Value: value}}})
+		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: LessConditionOperator, Value: value}}})
 	case "<=":
-		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: "$lte", Value: value}}})
+		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: LessOrEqualConditionOperator, Value: value}}})
+	case "!=":
+		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: NotEqualConditionOperator, Value: value}}})
 	default:
 		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": value})
 	}
@@ -292,9 +293,7 @@ func (b *Bom) OrWhereConditions(field string, conditions string, value interface
 }
 
 func (b *Bom) SetUpdateOptions(opts ...*options.UpdateOptions) *Bom {
-	for _, value := range opts {
-		b.updateOptions = append(b.updateOptions, value)
-	}
+	b.updateOptions = append(b.updateOptions, opts...)
 	return b
 }
 
@@ -304,28 +303,27 @@ func (b *Bom) SetAggrigateOptions(opts ...*options.AggregateOptions) *Bom {
 }
 
 func (b *Bom) SetInsertOptions(opts ...*options.InsertOneOptions) *Bom {
-	for _, value := range opts {
-		b.insertOptions = append(b.insertOptions, value)
-	}
+	b.insertOptions = append(b.insertOptions, opts...)
 	return b
 }
 
 func (b *Bom) SetFindOneOptions(opts ...*options.FindOneOptions) *Bom {
-	for _, value := range opts {
-		b.findOneOptions = append(b.findOneOptions, value)
-	}
+	b.findOneOptions = append(b.findOneOptions, opts...)
 	return b
 }
 
 func (b *Bom) SetFindOnEndUpdateOptions(opts ...*options.FindOneAndUpdateOptions) *Bom {
-	for _, value := range opts {
-		b.findOneAndUpdateOptions = append(b.findOneAndUpdateOptions, value)
-	}
+	b.findOneAndUpdateOptions = append(b.findOneAndUpdateOptions, opts...)
 	return b
 }
 
 func (b *Bom) OrWhereEq(field string, value interface{}) *Bom {
 	b = b.OrWhereConditions(field, "=", value)
+	return b
+}
+
+func (b *Bom) OrWhereNotEq(field string, value interface{}) *Bom {
+	b = b.OrWhereConditions(field, "!=", value)
 	return b
 }
 
@@ -373,7 +371,9 @@ func (b *Bom) OrWhere(field string, value interface{}) *Bom {
 func (b *Bom) AggregateWithPagination(callback func(c *mongo.Cursor) (int32, error)) (*Pagination, error) {
 	p := &Pagination{}
 
-	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	aggregateOpts := options.Aggregate()
 	aggregateOpts.SetAllowDiskUse(false)
 
@@ -492,59 +492,23 @@ func (b *Bom) getPagination(total int32, page int32, size int32) *Pagination {
 	return b.pagination
 }
 
-func (b *Bom) readFieldName(f reflect.StructField) string {
-	val, ok := f.Tag.Lookup("json")
-	if !ok {
-		return strings.ToLower(f.Name)
-	}
-	opts := strings.Split(val, ",")
-	return strings.ToLower(opts[0])
-}
-
 func (b *Bom) structToMap(i interface{}) (map[string]interface{}, error) {
 	result := make(map[string]interface{})
-	v := reflect.ValueOf(i)
-	t := v.Type()
-	if t.Kind() != reflect.Struct {
-		return result, fmt.Errorf("type %s is not supported", t.Kind())
+	dataBytes, err := json.Marshal(i)
+	if err != nil {
+		return nil, err
 	}
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if f.PkgPath != "" {
-			continue
-		}
-		if val, exist := f.Tag.Lookup("update"); exist {
-			if strings.ToLower(val) != "true" {
-				continue
-			}
-		} else {
-			continue
-		}
-
-		fv := v.Field(i)
-		key := b.readFieldName(f)
-		tp := fv.Type().String()
-
-		value := fv.Interface()
-		switch tp {
-		case "string":
-			value = fv.String()
-			if fv.String() == "" {
-				continue
-			}
-		case "interface {}":
-			value = fv.Interface()
-		case "int", "int8", "int16", "int32", "int64":
-			value = fv.Int()
-		case "float64", "float32":
-			value = fv.Float()
-		}
-
+	err = json.Unmarshal(dataBytes, &result)
+	if err != nil {
+		return nil, err
+	}
+	correct := make(map[string]interface{})
+	for key, value := range result {
 		if _, ok := b.skipWhenUpdating[key]; !ok {
-			result[key] = value
+			correct[key] = value
 		}
 	}
-	return result, nil
+	return correct, nil
 }
 
 func (b *Bom) calculateOffset(page, size int32) (limit int32, offset int32) {
@@ -591,7 +555,7 @@ func (b *Bom) getCondition() interface{} {
 	return primitive.M{}
 }
 
-//Deprecated: method works not correctly user bom generator (https://github.com/cjp2600/protoc-gen-bom)
+//Deprecated: method works not correctly use bom generator (https://github.com/cjp2600/protoc-gen-bom)
 func (b *Bom) Update(entity interface{}) (*mongo.UpdateResult, error) {
 	mp, _ := b.structToMap(entity)
 	var eRes []primitive.E
@@ -612,13 +576,17 @@ func (b *Bom) Update(entity interface{}) (*mongo.UpdateResult, error) {
 }
 
 func (b *Bom) UpdateRaw(update interface{}) (*mongo.UpdateResult, error) {
-	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	res, err := b.Mongo().UpdateOne(ctx, b.getCondition(), update, b.updateOptions...)
 	return res, err
 }
 
 func (b *Bom) InsertOne(document interface{}) (*mongo.InsertOneResult, error) {
-	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	return b.Mongo().InsertOne(ctx, document, b.insertOptions...)
 }
 
@@ -636,37 +604,45 @@ func (b *Bom) ConvertJsonToBson(document interface{}) (interface{}, error) {
 }
 
 func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, error) {
-	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
-	var bsonDocuments []interface{}
-	for _, document := range documents {
-		bsonDocuments = append(bsonDocuments, document)
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	return b.Mongo().InsertMany(ctx, documents)
 }
 
 func (b *Bom) FindOne(callback func(s *mongo.SingleResult) error) error {
-	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	s := b.Mongo().FindOne(ctx, b.getCondition(), b.findOneOptions...)
 	return callback(s)
 }
 
 func (b *Bom) FindOneAndUpdate(update interface{}) *mongo.SingleResult {
-	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	return b.Mongo().FindOneAndUpdate(ctx, b.getCondition(), update, b.findOneAndUpdateOptions...)
 }
 
 func (b *Bom) FindOneAndDelete() *mongo.SingleResult {
-	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	return b.Mongo().FindOneAndDelete(ctx, b.getCondition())
 }
 
 func (b *Bom) DeleteMany() (*mongo.DeleteResult, error) {
-	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	return b.Mongo().DeleteMany(ctx, b.getCondition())
 }
 
 func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pagination, error) {
-	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	findOptions := options.Find()
 	limit, offset := b.calculateOffset(b.limit.Page, b.limit.Size)
 
@@ -713,14 +689,15 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 }
 
 func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId string, err error) {
-	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	lastId = b.lastId
 	cur := &mongo.Cursor{}
 
 	defer cur.Close(ctx)
 
 	findOptions := options.Find()
-
 	findOptions.SetLimit(int64(b.limit.Size))
 
 	if projection := b.BuildProjection(); projection != nil {
@@ -760,7 +737,9 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 }
 
 func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
-	ctx, _ := context.WithTimeout(context.Background(), b.queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	findOptions := options.Find()
 	if projection := b.BuildProjection(); projection != nil {
 		findOptions.SetProjection(projection)
