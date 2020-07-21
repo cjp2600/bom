@@ -452,7 +452,7 @@ func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, erro
 	return insertManyResult, err
 }
 
-// FindOne find one item method
+// FindOne find one item method.
 func (b *Bom) FindOne(callback func(s *mongo.SingleResult) error) error {
 	defer b.cancel()
 
