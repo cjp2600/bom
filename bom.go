@@ -5,169 +5,144 @@ package bom
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"math"
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// Define common const
+const (
+	DefaultQueryTimeout = 5 * time.Second
+	DefaultSize         = 20
+)
+
+// Option bom size type
+type Size int32
+
+// Define common structures
 type (
+
+	// Bom main structure
 	Bom struct {
-		client                  *mongo.Client
-		dbName                  string
-		dbCollection            string
-		queryTimeout            time.Duration
-		condition               interface{}
-		skipWhenUpdating        map[string]bool
-		whereConditions         []map[string]interface{}
-		orConditions            []map[string]interface{}
-		inConditions            []map[string]interface{}
-		notInConditions         []map[string]interface{}
-		notConditions           []map[string]interface{}
-		pipeline                AggregateStages
+		// default mongodb client (go.mongodb.org/mongo-driver)
+		client *mongo.Client
+
+		// configuration fields
+		dbName       string
+		dbCollection string
+		queryTimeout time.Duration
+
+		condition        interface{}
+		skipWhenUpdating map[string]bool
+		conditions       Conditions
+		pipeline         AggregateStages
+
+		// go.mongodb.org/mongo-driver options (with setters)
+		options Options
+
+		lastId         string
+		useAggregation bool
+		selectArg      []interface{}
+
+		// query config
+		limit *Limit
+		sort  []*Sort
+	}
+
+	// Conditions mongodb conditions structure
+	Conditions struct {
+		whereConditions []map[string]interface{}
+		orConditions    []map[string]interface{}
+		inConditions    []map[string]interface{}
+		notInConditions []map[string]interface{}
+		notConditions   []map[string]interface{}
+	}
+
+	// Options client options
+	Options struct {
 		aggregateOptions        []*options.AggregateOptions
 		updateOptions           []*options.UpdateOptions
 		insertOptions           []*options.InsertOneOptions
 		findOneOptions          []*options.FindOneOptions
+		findOptions             []*options.FindOptions
 		findOneAndUpdateOptions []*options.FindOneAndUpdateOptions
-		pagination              *Pagination
-		limit                   *Limit
-		sort                    []*Sort
-		lastId                  string
-		useAggrigate            bool
-		selectArg               []interface{}
 	}
-	Pagination struct {
-		TotalCount  int32
-		TotalPages  int32
-		CurrentPage int32
-		Size        int32
-	}
+
+	// Sort data
 	Sort struct {
 		Field string
 		Type  string
 	}
+
+	// Limit data
 	Limit struct {
 		Page int32
 		Size int32
 	}
-	Size      int32
-	Option    func(*Bom) error
+
+	// ElemMatch data for projection
 	ElemMatch struct {
 		Key string
 		Val interface{}
 	}
 )
 
-const (
-	DefaultQueryTimeout = 5 * time.Second
-	DefaultSize         = 20
-)
+// Mongo source client (go.mongodb.org/mongo-driver)
+func (b *Bom) Mongo() *mongo.Collection {
+	return b.client.Database(b.dbName).Collection(b.dbCollection)
+}
 
-var (
-	mType            = map[string]int32{"asc": 1, "desc": -1}
-	skipWhenUpdating = map[string]bool{"id": true, "createdat": true, "updatedat": true}
-)
-
+// New init bom object
 func New(options ...Option) (*Bom, error) {
+	// set common values
 	b := &Bom{
-		queryTimeout: DefaultQueryTimeout,
-		pagination: &Pagination{
-			Size:        DefaultSize,
-			CurrentPage: 1,
-		},
-		skipWhenUpdating: skipWhenUpdating,
+		queryTimeout:     DefaultQueryTimeout,
+		skipWhenUpdating: SkipWhenUpdating,
 		limit:            &Limit{Page: 1, Size: DefaultSize},
 	}
+
+	// apply options
 	for _, option := range options {
 		if err := option(b); err != nil {
 			return nil, err
 		}
 	}
+
+	// check exist client
 	if b.client == nil {
-		return nil, fmt.Errorf("mondodb client is required")
+		return nil, ErrClientRequired
 	}
 	return b, nil
 }
 
-func ElMatch(key string, val interface{}) ElemMatch {
-	return ElemMatch{Key: key, Val: val}
-}
-
-func ToObj(id string) primitive.ObjectID {
-	objectID, _ := primitive.ObjectIDFromHex(id)
-	return objectID
-}
-
-func ToObjects(ids []string) []primitive.ObjectID {
-	var objectIds []primitive.ObjectID
-	for _, id := range ids {
-		objectId, _ := primitive.ObjectIDFromHex(id)
-		objectIds = append(objectIds, objectId)
-	}
-	return objectIds
-}
-
-func SetMongoClient(client *mongo.Client) Option {
-	return func(b *Bom) error {
-		b.client = client
-		return nil
-	}
-}
-
-func SetDatabaseName(dbName string) Option {
-	return func(b *Bom) error {
-		b.dbName = dbName
-		return nil
-	}
-}
-
-func SetSkipWhenUpdating(fieldsMap map[string]bool) Option {
-	return func(b *Bom) error {
-		b.skipWhenUpdating = fieldsMap
-		return nil
-	}
-}
-
-func SetCollection(collection string) Option {
-	return func(b *Bom) error {
-		b.dbCollection = collection
-		return nil
-	}
-}
-
-func SetQueryTimeout(time time.Duration) Option {
-	return func(b *Bom) error {
-		b.queryTimeout = time
-		return nil
-	}
-}
-
+// WithDB enrich database name
 func (b *Bom) WithDB(dbName string) *Bom {
 	b.dbName = dbName
 	return b
 }
 
+// WithColl enrich collection name
 func (b *Bom) WithColl(collection string) *Bom {
 	b.dbCollection = collection
 	return b
 }
 
+// WithTimeout enrich query with timeout
 func (b *Bom) WithTimeout(time time.Duration) *Bom {
 	b.queryTimeout = time
 	return b
 }
 
+// WithCondition set default condition
 func (b *Bom) WithCondition(condition interface{}) *Bom {
 	b.condition = condition
 	return b
 }
 
+// WithLimit set limit
 func (b *Bom) WithLimit(limit *Limit) *Bom {
 	if limit.Page > 0 {
 		b.limit.Page = limit.Page
@@ -178,16 +153,19 @@ func (b *Bom) WithLimit(limit *Limit) *Bom {
 	return b
 }
 
-func (b *Bom) WithLastId(lastId string) *Bom {
-	b.lastId = lastId
-	return b
-}
-
+// WithSort set sort
 func (b *Bom) WithSort(sort *Sort) *Bom {
 	b.sort = append(b.sort, sort)
 	return b
 }
 
+// WithLastId set custom lastId
+func (b *Bom) WithLastId(lastId string) *Bom {
+	b.lastId = lastId
+	return b
+}
+
+// WithSize set size
 func (b *Bom) WithSize(size int32) *Bom {
 	if size > 0 {
 		b.limit.Size = size
@@ -195,222 +173,158 @@ func (b *Bom) WithSize(size int32) *Bom {
 	return b
 }
 
-func (b *Bom) FillPipeline(p ...Stager) {
-	if b.pipeline == nil {
-		b.pipeline = make(AggregateStages, 0)
-	}
-
-	for _, stage := range p {
-		if stage == nil {
-			continue
-		}
-
-		b.pipeline = append(b.pipeline, stage)
-	}
-}
-
-//Deprecated: should use WhereConditions or WhereEq
-func (b *Bom) Where(field string, value interface{}) *Bom {
-	b = b.WhereConditions(field, "=", value)
+// SetUpdateOptions set custom update options
+func (b *Bom) SetUpdateOptions(opts ...*options.UpdateOptions) *Bom {
+	b.options.updateOptions = append(b.options.updateOptions, opts...)
 	return b
 }
 
-func (b *Bom) WhereEq(field string, value interface{}) *Bom {
-	b = b.WhereConditions(field, "=", value)
+// SetAggregateOptions set custom aggregate options
+func (b *Bom) SetAggregateOptions(opts ...*options.AggregateOptions) *Bom {
+	b.options.aggregateOptions = append(b.options.aggregateOptions, opts...)
 	return b
 }
 
-func (b *Bom) WhereNotEq(field string, value interface{}) *Bom {
-	b = b.WhereConditions(field, "!=", value)
+// SetFindOptions set custom find options
+func (b *Bom) SetFindOptions(opts ...*options.FindOptions) *Bom {
+	b.options.findOptions = append(b.options.findOptions, opts...)
 	return b
 }
 
-func (b *Bom) WhereGt(field string, value interface{}) *Bom {
-	b = b.WhereConditions(field, ">", value)
+// SetFindOnEndUpdateOptions set custom find one and update options
+func (b *Bom) SetFindOnEndUpdateOptions(opts ...*options.FindOneAndUpdateOptions) *Bom {
+	b.options.findOneAndUpdateOptions = append(b.options.findOneAndUpdateOptions, opts...)
 	return b
 }
 
-func (b *Bom) WhereGte(field string, value interface{}) *Bom {
-	b = b.WhereConditions(field, ">=", value)
+// SetInsertOptions set custom insert options
+func (b *Bom) SetInsertOptions(opts ...*options.InsertOneOptions) *Bom {
+	b.options.insertOptions = append(b.options.insertOptions, opts...)
 	return b
 }
 
-func (b *Bom) WhereLt(field string, value interface{}) *Bom {
-	b = b.WhereConditions(field, "<", value)
+// SetFindOneOptions set custom find one options
+func (b *Bom) SetFindOneOptions(opts ...*options.FindOneOptions) *Bom {
+	b.options.findOneOptions = append(b.options.findOneOptions, opts...)
 	return b
 }
 
-func (b *Bom) WhereLte(field string, value interface{}) *Bom {
-	b = b.WhereConditions(field, "<=", value)
-	return b
-}
-func (b *Bom) AddSelect(arg interface{}) *Bom {
-	b.useAggrigate = true
-	b.selectArg = append(b.selectArg, arg)
-	return b
-}
-
+// Select analog classic orm method for field
 func (b *Bom) Select(arg ...interface{}) *Bom {
-	b.useAggrigate = true
 	b.selectArg = arg
 	return b
 }
 
-func (b *Bom) WhereConditions(field string, conditions string, value interface{}) *Bom {
-	switch conditions {
-	case ">":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: GreaterConditionOperator, Value: value}}})
-	case ">=":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: GreaterOrEqualConditionOperator, Value: value}}})
-	case "<":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: LessConditionOperator, Value: value}}})
-	case "<=":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: LessOrEqualConditionOperator, Value: value}}})
-	case "!=":
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: NotEqualConditionOperator, Value: value}}})
-	default:
-		b.whereConditions = append(b.whereConditions, map[string]interface{}{"field": field, "value": value})
+// FillPipeline fill aggregation pipelines
+func (b *Bom) FillPipeline(p ...Stager) {
+	if b.pipeline == nil {
+		b.pipeline = make(AggregateStages, 0)
 	}
-	return b
-}
-
-func (b *Bom) OrWhereConditions(field string, conditions string, value interface{}) *Bom {
-	switch conditions {
-	case ">":
-		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: GreaterConditionOperator, Value: value}}})
-	case ">=":
-		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: GreaterOrEqualConditionOperator, Value: value}}})
-	case "<":
-		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: LessConditionOperator, Value: value}}})
-	case "<=":
-		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: LessOrEqualConditionOperator, Value: value}}})
-	case "!=":
-		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": primitive.D{{Key: NotEqualConditionOperator, Value: value}}})
-	default:
-		b.orConditions = append(b.orConditions, map[string]interface{}{"field": field, "value": value})
+	for _, stage := range p {
+		if stage == nil {
+			continue
+		}
+		b.pipeline = append(b.pipeline, stage)
 	}
+}
+
+// WhereEq where condition example: bom.WhereEq("_id", bom.ToObject(id))
+func (b *Bom) WhereEq(field string, value interface{}) *Bom {
+	b = b.whereConditions(field, EqualConditionOperator, value)
 	return b
 }
 
-func (b *Bom) SetUpdateOptions(opts ...*options.UpdateOptions) *Bom {
-	b.updateOptions = append(b.updateOptions, opts...)
+// WhereNotEq where condition example: bom.WhereNotEq("_id", bom.ToObject(id))
+func (b *Bom) WhereNotEq(field string, value interface{}) *Bom {
+	b = b.whereConditions(field, NotEqualConditionOperator, value)
 	return b
 }
 
-func (b *Bom) SetAggrigateOptions(opts ...*options.AggregateOptions) *Bom {
-	b.aggregateOptions = opts
+// WhereGt Greater Condition example: bom.WhereGt("age", 30)
+func (b *Bom) WhereGt(field string, value interface{}) *Bom {
+	b = b.whereConditions(field, GreaterConditionOperator, value)
 	return b
 }
 
-func (b *Bom) SetInsertOptions(opts ...*options.InsertOneOptions) *Bom {
-	b.insertOptions = append(b.insertOptions, opts...)
+// WhereGte Greater Or Equal Condition example: bom.WhereGte("age", 30)
+func (b *Bom) WhereGte(field string, value interface{}) *Bom {
+	b = b.whereConditions(field, GreaterOrEqualConditionOperator, value)
 	return b
 }
 
-func (b *Bom) SetFindOneOptions(opts ...*options.FindOneOptions) *Bom {
-	b.findOneOptions = append(b.findOneOptions, opts...)
+// WhereLt Less Condition example: bom.WhereLt("age", 30)
+func (b *Bom) WhereLt(field string, value interface{}) *Bom {
+	b = b.whereConditions(field, LessConditionOperator, value)
 	return b
 }
 
-func (b *Bom) SetFindOnEndUpdateOptions(opts ...*options.FindOneAndUpdateOptions) *Bom {
-	b.findOneAndUpdateOptions = append(b.findOneAndUpdateOptions, opts...)
+// WhereLte Less Condition example: bom.WhereLt("age", 30)
+func (b *Bom) WhereLte(field string, value interface{}) *Bom {
+	b = b.whereConditions(field, LessOrEqualConditionOperator, value)
 	return b
 }
 
-func (b *Bom) OrWhereEq(field string, value interface{}) *Bom {
-	b = b.OrWhereConditions(field, "=", value)
-	return b
-}
-
-func (b *Bom) OrWhereNotEq(field string, value interface{}) *Bom {
-	b = b.OrWhereConditions(field, "!=", value)
-	return b
-}
-
-func (b *Bom) OrWhereGt(field string, value interface{}) *Bom {
-	b = b.OrWhereConditions(field, ">", value)
-	return b
-}
-
-func (b *Bom) OrWhereGte(field string, value interface{}) *Bom {
-	b = b.OrWhereConditions(field, ">=", value)
-	return b
-}
-
-func (b *Bom) OrWhereLt(field string, value interface{}) *Bom {
-	b = b.OrWhereConditions(field, "<", value)
-	return b
-}
-
-func (b *Bom) OrWhereLte(field string, value interface{}) *Bom {
-	b = b.OrWhereConditions(field, "<=", value)
-	return b
-}
-
+// Not Not Condition example: bom.Not("age", 30)
 func (b *Bom) Not(field string, value interface{}) *Bom {
-	b.notConditions = append(b.notConditions, map[string]interface{}{"field": field, "value": value})
+	b.conditions.notConditions = append(b.conditions.notConditions, map[string]interface{}{"field": field, "value": value})
 	return b
 }
 
-func (b *Bom) InWhere(field string, value interface{}) *Bom {
-	b.inConditions = append(b.inConditions, map[string]interface{}{"field": field, "value": value})
+// WhereIn WhereIn Condition example: bom.WhereIn("age", 30)
+func (b *Bom) WhereIn(field string, value interface{}) *Bom {
+	b.conditions.inConditions = append(b.conditions.inConditions, map[string]interface{}{"field": field, "value": value})
 	return b
 }
 
-func (b *Bom) NotInWhere(field string, value interface{}) *Bom {
-	b.notInConditions = append(b.notInConditions, map[string]interface{}{"field": field, "value": value})
+// NotWhereIn not where in condition example: bom.NotWhereIn("age", 30)
+func (b *Bom) NotWhereIn(field string, value interface{}) *Bom {
+	b.conditions.notInConditions = append(b.conditions.notInConditions, map[string]interface{}{"field": field, "value": value})
 	return b
 }
 
-//Deprecated: should use OrWhereConditions or OrWhereEq
+// OrWhereNotEq or where in condition example: bom.OrWhereEq("age", 30)
+func (b *Bom) OrWhereEq(field string, value interface{}) *Bom {
+	b = b.orWhereConditions(field, EqualConditionOperator, value)
+	return b
+}
+
+// OrWhereNotEq or not eq where in condition example: bom.OrWhereNotEq("age", 30)
+func (b *Bom) OrWhereNotEq(field string, value interface{}) *Bom {
+	b = b.orWhereConditions(field, NotEqualConditionOperator, value)
+	return b
+}
+
+// OrWhereGt or where gt in condition example: bom.OrWhereGt("age", 30)
+func (b *Bom) OrWhereGt(field string, value interface{}) *Bom {
+	b = b.orWhereConditions(field, GreaterConditionOperator, value)
+	return b
+}
+
+// OrWhereGte or where gte in condition example: bom.OrWhereGte("age", 30)
+func (b *Bom) OrWhereGte(field string, value interface{}) *Bom {
+	b = b.orWhereConditions(field, GreaterOrEqualConditionOperator, value)
+	return b
+}
+
+// OrWhereLt or where lt in condition example: bom.OrWhereLt("age", 30)
+func (b *Bom) OrWhereLt(field string, value interface{}) *Bom {
+	b = b.orWhereConditions(field, LessConditionOperator, value)
+	return b
+}
+
+// OrWhereLte or where lte in condition example: bom.OrWhereLte("age", 30)
+func (b *Bom) OrWhereLte(field string, value interface{}) *Bom {
+	b = b.orWhereConditions(field, LessOrEqualConditionOperator, value)
+	return b
+}
+
+//OrWhere Deprecated: should use orWhereConditions or OrWhereEq
 func (b *Bom) OrWhere(field string, value interface{}) *Bom {
 	b.OrWhereEq(field, value)
 	return b
 }
 
-func (b *Bom) AggregateWithPagination(callback func(c *mongo.Cursor) (int32, error)) (*Pagination, error) {
-	p := &Pagination{}
-
-	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
-	defer cancel()
-
-	aggregateOpts := options.Aggregate()
-	aggregateOpts.SetAllowDiskUse(false)
-
-	facet := NewFacetStage()
-	limit, offset := b.calculateOffset(b.limit.Page, b.limit.Size)
-	facet.SetLimit(limit + offset)
-	facet.SetSkip(offset)
-	if sm := b.getSort(); sm != nil {
-		facet.SetSort(sm)
-	}
-
-	b.FillPipeline(facet)
-
-	pipeline, err := b.pipeline.Aggregate()
-	if err != nil {
-		return p, err
-	}
-
-	cur, err := b.Mongo().Aggregate(ctx, pipeline, aggregateOpts)
-	if err != nil {
-		return &Pagination{}, err
-	}
-
-	defer cur.Close(ctx)
-
-	count := int32(0)
-	if count, err = callback(cur); err != nil {
-		return p, err
-	}
-
-	if err := cur.Err(); err != nil {
-		return p, err
-	}
-
-	return b.getPagination(count, b.limit.Page, b.limit.Size), err
-}
-
+// BuildProjection build projection
 func (b *Bom) BuildProjection() primitive.M {
 	var result primitive.M
 	if len(b.selectArg) > 0 {
@@ -422,137 +336,13 @@ func (b *Bom) BuildProjection() primitive.M {
 			case ElemMatch:
 				if vo, ok := v.Val.(ElemMatch); ok {
 					var sub = make(primitive.M)
-					sub["$elemMatch"] = primitive.M{vo.Key: vo.Val}
+					sub[ElMathConditionOperator] = primitive.M{vo.Key: vo.Val}
 					result[v.Key] = sub
 				}
 			}
 		}
 	}
 	return result
-}
-
-func (b *Bom) buildCondition() interface{} {
-	result := make(primitive.M)
-	if len(b.whereConditions) > 0 {
-		var query []primitive.M
-		for _, cnd := range b.whereConditions {
-			field := cnd["field"]
-			value := cnd["value"]
-			query = append(query, primitive.M{field.(string): value})
-		}
-		result["$and"] = query
-	}
-	if len(b.orConditions) > 0 {
-		var query []primitive.M
-		for _, cnd := range b.orConditions {
-			field := cnd["field"]
-			value := cnd["value"]
-			query = append(query, primitive.M{field.(string): value})
-		}
-		result["$or"] = query
-	}
-	if len(b.inConditions) > 0 {
-		for _, cnd := range b.inConditions {
-			field := cnd["field"]
-			value := cnd["value"]
-			result[field.(string)] = primitive.M{"$in": value}
-		}
-	}
-	if len(b.notInConditions) > 0 {
-		for _, cnd := range b.notInConditions {
-			field := cnd["field"]
-			value := cnd["value"]
-			result[field.(string)] = primitive.M{"$nin": value}
-		}
-	}
-	return result
-}
-
-func (b *Bom) Mongo() *mongo.Collection {
-	return b.client.Database(b.dbName).Collection(b.dbCollection)
-}
-
-func (b *Bom) getTotalPages() int32 {
-	d := float64(b.pagination.TotalCount) / float64(b.pagination.Size)
-	if d < 0 {
-		d = 1
-	}
-	return int32(math.Ceil(d))
-}
-
-func (b *Bom) getPagination(total int32, page int32, size int32) *Pagination {
-	b.pagination.TotalCount = total
-	if page > 0 {
-		b.pagination.CurrentPage = page
-	}
-	if size > 0 {
-		b.pagination.Size = size
-	}
-	b.pagination.TotalPages = b.getTotalPages()
-	return b.pagination
-}
-
-func (b *Bom) structToMap(i interface{}) (map[string]interface{}, error) {
-	result := make(map[string]interface{})
-	dataBytes, err := json.Marshal(i)
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(dataBytes, &result)
-	if err != nil {
-		return nil, err
-	}
-	correct := make(map[string]interface{})
-	for key, value := range result {
-		if _, ok := b.skipWhenUpdating[key]; !ok {
-			correct[key] = value
-		}
-	}
-	return correct, nil
-}
-
-func (b *Bom) calculateOffset(page, size int32) (limit int32, offset int32) {
-	limit = b.limit.Size
-	if page == 0 {
-		page = 1
-	}
-	if size > 0 {
-		limit = size
-	}
-	o := float64(page-1) * float64(limit)
-	offset = int32(math.Ceil(o))
-	return
-}
-
-func (b *Bom) getSort() map[string]interface{} {
-	var sortMap map[string]interface{}
-	if len(b.sort) > 0 {
-		sortMap = make(map[string]interface{})
-		for _, sort := range b.sort {
-			if len(sort.Field) > 0 {
-				sortMap[strings.ToLower(sort.Field)] = 1
-				if len(sort.Type) > 0 {
-					if val, ok := mType[strings.ToLower(sort.Type)]; ok {
-						sortMap[strings.ToLower(sort.Field)] = val
-					}
-				}
-			}
-		}
-	}
-	return sortMap
-}
-
-func (b *Bom) getCondition() interface{} {
-	if b.condition != nil {
-		return b.condition
-	}
-	bc := b.buildCondition()
-	if bc != nil {
-		if val, ok := bc.(primitive.M); ok {
-			return val
-		}
-	}
-	return primitive.M{}
 }
 
 //Deprecated: method works not correctly use bom generator (https://github.com/cjp2600/protoc-gen-bom)
@@ -575,34 +365,24 @@ func (b *Bom) Update(entity interface{}) (*mongo.UpdateResult, error) {
 	return b.UpdateRaw(upResult)
 }
 
+// UpdateRaw - update one eq
 func (b *Bom) UpdateRaw(update interface{}) (*mongo.UpdateResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
 
-	res, err := b.Mongo().UpdateOne(ctx, b.getCondition(), update, b.updateOptions...)
+	res, err := b.Mongo().UpdateOne(ctx, b.getCondition(), update, b.options.updateOptions...)
 	return res, err
 }
 
+// InsertOne - insert one method
 func (b *Bom) InsertOne(document interface{}) (*mongo.InsertOneResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
 
-	return b.Mongo().InsertOne(ctx, document, b.insertOptions...)
+	return b.Mongo().InsertOne(ctx, document, b.options.insertOptions...)
 }
 
-func (b *Bom) ConvertJsonToBson(document interface{}) (interface{}, error) {
-	bytes, err := json.Marshal(document)
-	if err != nil {
-		return nil, err
-	}
-	var bsonDocument interface{}
-	err = bson.UnmarshalExtJSON(bytes, true, &bsonDocument)
-	if err != nil {
-		return nil, err
-	}
-	return bsonDocument, nil
-}
-
+// InsertMany insert meany
 func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
@@ -610,21 +390,24 @@ func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, erro
 	return b.Mongo().InsertMany(ctx, documents)
 }
 
+// FindOne find one item method
 func (b *Bom) FindOne(callback func(s *mongo.SingleResult) error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
 
-	s := b.Mongo().FindOne(ctx, b.getCondition(), b.findOneOptions...)
+	s := b.Mongo().FindOne(ctx, b.getCondition(), b.options.findOneOptions...)
 	return callback(s)
 }
 
+// FindOneAndUpdate find and update item method
 func (b *Bom) FindOneAndUpdate(update interface{}) *mongo.SingleResult {
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
 
-	return b.Mongo().FindOneAndUpdate(ctx, b.getCondition(), update, b.findOneAndUpdateOptions...)
+	return b.Mongo().FindOneAndUpdate(ctx, b.getCondition(), update, b.options.findOneAndUpdateOptions...)
 }
 
+// FindOneAndDelete find and delete item method
 func (b *Bom) FindOneAndDelete() *mongo.SingleResult {
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
@@ -632,6 +415,7 @@ func (b *Bom) FindOneAndDelete() *mongo.SingleResult {
 	return b.Mongo().FindOneAndDelete(ctx, b.getCondition())
 }
 
+// DeleteMany delete many
 func (b *Bom) DeleteMany() (*mongo.DeleteResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
@@ -639,24 +423,71 @@ func (b *Bom) DeleteMany() (*mongo.DeleteResult, error) {
 	return b.Mongo().DeleteMany(ctx, b.getCondition())
 }
 
-func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pagination, error) {
+// AggregateWithPagination pagination aggr
+func (b *Bom) AggregateWithPagination(callback func(c *mongo.Cursor) (int32, error)) (*Pagination, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
 
-	findOptions := options.Find()
-	limit, offset := b.calculateOffset(b.limit.Page, b.limit.Size)
+	aggregateOpts := options.Aggregate()
+	aggregateOpts.SetAllowDiskUse(false)
 
+	pagination := NewPagination(b.limit.Page, b.limit.Size)
+
+	facet := NewFacetStage()
+	limit, offset := pagination.CalculateOffset()
+	facet.SetLimit(limit + offset)
+	facet.SetSkip(offset)
+	if sm := b.getSort(); sm != nil {
+		facet.SetSort(sm)
+	}
+
+	b.FillPipeline(facet)
+	b.options.aggregateOptions = append(b.options.aggregateOptions, aggregateOpts)
+
+	pipeline, err := b.pipeline.Aggregate()
+	if err != nil {
+		return nil, err
+	}
+
+	cur, err := b.Mongo().Aggregate(ctx, pipeline, b.options.aggregateOptions...)
+	if err != nil {
+		return &Pagination{}, err
+	}
+
+	defer cur.Close(ctx)
+
+	count := int32(0)
+	if count, err = callback(cur); err != nil {
+		return nil, err
+	}
+
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+
+	return pagination.WithTotal(count), err
+}
+
+// ListWithPagination list of items with pagination
+func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pagination, error) {
+	// create context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	pagination := NewPagination(b.limit.Page, b.limit.Size)
+	limit, offset := pagination.CalculateOffset()
+
+	var findOptions = options.Find()
 	findOptions.SetLimit(int64(limit)).SetSkip(int64(offset))
-
 	if sm := b.getSort(); sm != nil {
 		findOptions.SetSort(sm)
 	}
-
-	condition := b.getCondition()
-
 	if projection := b.BuildProjection(); projection != nil {
 		findOptions.SetProjection(projection)
 	}
+
+	condition := b.getCondition()
+	b.options.findOptions = append(b.options.findOptions, findOptions)
 
 	var count int64
 	var err error
@@ -673,7 +504,7 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 	if err != nil {
 		return &Pagination{}, err
 	}
-	cur, err := b.Mongo().Find(ctx, condition, findOptions)
+	cur, err := b.Mongo().Find(ctx, condition, b.options.findOptions...)
 	if err != nil {
 		return &Pagination{}, err
 	}
@@ -684,10 +515,10 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 	if err := cur.Err(); err != nil {
 		return &Pagination{}, err
 	}
-	pagination := b.getPagination(int32(count), b.limit.Page, b.limit.Size)
-	return pagination, err
+	return pagination.WithTotal(int32(count)), err
 }
 
+// ListWithLastId iteration method for deep pagination
 func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
@@ -705,7 +536,7 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 	}
 
 	if lastId != "" {
-		b.WhereConditions("_id", ">", ToObj(lastId))
+		b.whereConditions("_id", GreaterConditionOperator, ToObj(lastId))
 	}
 
 	cur, err = b.Mongo().Find(ctx, b.getCondition(), findOptions)
@@ -736,6 +567,7 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 	}
 }
 
+// List Common items list method
 func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
@@ -761,4 +593,118 @@ func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
 	}
 
 	return err
+}
+
+// conditionTransformer internal method for transform condition
+func (b *Bom) conditionTransformer(field string, operator string, value interface{}) map[string]interface{} {
+	var c = make(map[string]interface{})
+	c["field"] = field
+	c["value"] = value
+	if operator != EqualConditionOperator {
+		c["value"] = primitive.D{{Key: operator, Value: value}}
+	}
+	return c
+}
+
+// whereConditions internal method for build or condition
+func (b *Bom) orWhereConditions(field string, conditions string, value interface{}) *Bom {
+	b.conditions.orConditions = append(b.conditions.orConditions, b.conditionTransformer(field, conditions, value))
+	return b
+}
+
+// whereConditions internal method for build condition
+func (b *Bom) whereConditions(field string, conditions string, value interface{}) *Bom {
+	b.conditions.whereConditions = append(b.conditions.whereConditions, b.conditionTransformer(field, conditions, value))
+	return b
+}
+
+// buildCondition internal build condition method
+func (b *Bom) buildCondition() interface{} {
+	result := make(primitive.M)
+	if len(b.conditions.whereConditions) > 0 {
+		var query []primitive.M
+		for _, cnd := range b.conditions.whereConditions {
+			field := cnd["field"]
+			value := cnd["value"]
+			query = append(query, primitive.M{field.(string): value})
+		}
+		result[AndConditionOperator] = query
+	}
+	if len(b.conditions.orConditions) > 0 {
+		var query []primitive.M
+		for _, cnd := range b.conditions.orConditions {
+			field := cnd["field"]
+			value := cnd["value"]
+			query = append(query, primitive.M{field.(string): value})
+		}
+		result[OrConditionOperator] = query
+	}
+	if len(b.conditions.inConditions) > 0 {
+		for _, cnd := range b.conditions.inConditions {
+			field := cnd["field"]
+			value := cnd["value"]
+			result[field.(string)] = primitive.M{InConditionOperator: value}
+		}
+	}
+	if len(b.conditions.notInConditions) > 0 {
+		for _, cnd := range b.conditions.notInConditions {
+			field := cnd["field"]
+			value := cnd["value"]
+			result[field.(string)] = primitive.M{NotInConditionOperator: value}
+		}
+	}
+	return result
+}
+
+// structToMap struct to map
+func (b *Bom) structToMap(i interface{}) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+	dataBytes, err := json.Marshal(i)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(dataBytes, &result)
+	if err != nil {
+		return nil, err
+	}
+	correct := make(map[string]interface{})
+	for key, value := range result {
+		if _, ok := b.skipWhenUpdating[key]; !ok {
+			correct[key] = value
+		}
+	}
+	return correct, nil
+}
+
+// getSort get sort object
+func (b *Bom) getSort() map[string]interface{} {
+	var sortMap map[string]interface{}
+	if len(b.sort) > 0 {
+		sortMap = make(map[string]interface{})
+		for _, sort := range b.sort {
+			if len(sort.Field) > 0 {
+				sortMap[strings.ToLower(sort.Field)] = 1
+				if len(sort.Type) > 0 {
+					if val, ok := SortTypeMatcher[strings.ToLower(sort.Type)]; ok {
+						sortMap[strings.ToLower(sort.Field)] = val
+					}
+				}
+			}
+		}
+	}
+	return sortMap
+}
+
+// getCondition common condition builder method
+func (b *Bom) getCondition() interface{} {
+	if b.condition != nil {
+		return b.condition
+	}
+	bc := b.buildCondition()
+	if bc != nil {
+		if val, ok := bc.(primitive.M); ok {
+			return val
+		}
+	}
+	return primitive.M{}
 }

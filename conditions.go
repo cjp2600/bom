@@ -2,6 +2,10 @@ package bom
 
 import "go.mongodb.org/mongo-driver/bson/primitive"
 
+var SkipWhenUpdating = map[string]bool{"id": true, "createdat": true, "updatedat": true}
+
+var SortTypeMatcher = map[string]int32{"asc": 1, "desc": -1}
+
 type Stager interface {
 	GetStage() primitive.M
 }
@@ -32,4 +36,6 @@ const (
 	LimitOperator = "$limit"
 	SkipOperator  = "$skip"
 	SortOperator  = "$sort"
+
+	ElMathConditionOperator = "$elemMatch"
 )
