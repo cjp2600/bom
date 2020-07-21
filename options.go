@@ -1,6 +1,7 @@
 package bom
 
 import (
+	"context"
 	"go.mongodb.org/mongo-driver/mongo"
 	"time"
 )
@@ -44,6 +45,22 @@ func SetCollection(collection string) Option {
 func SetQueryTimeout(time time.Duration) Option {
 	return func(b *Bom) error {
 		b.queryTimeout = time
+		return nil
+	}
+}
+
+// SetModel set work model
+func SetModel(document interface{}) Option {
+	return func(b *Bom) error {
+		b.model = document
+		return nil
+	}
+}
+
+// SetContext set custom context
+func SetContext(ctx context.Context) Option {
+	return func(b *Bom) error {
+		b.ctx, b.cancel = context.WithTimeout(ctx, b.queryTimeout)
 		return nil
 	}
 }
