@@ -30,6 +30,7 @@ type AfterDelete interface {
 	AfterDelete() error
 }
 
+// callToAfterDelete internal method
 func callToAfterDelete(document interface{}) error {
 	if event, ok := document.(AfterDelete); ok {
 		if err := event.AfterDelete(); err != nil {
@@ -39,6 +40,7 @@ func callToAfterDelete(document interface{}) error {
 	return nil
 }
 
+// callToBeforeDelete internal method
 func callToBeforeDelete(document interface{}) error {
 	if event, ok := document.(BeforeDelete); ok {
 		if err := event.BeforeDelete(); err != nil {
@@ -48,6 +50,7 @@ func callToBeforeDelete(document interface{}) error {
 	return nil
 }
 
+// callToAfterUpdate internal method
 func callToAfterUpdate(document interface{}) error {
 	if event, ok := document.(AfterUpdate); ok {
 		if err := event.AfterUpdate(); err != nil {
@@ -57,6 +60,7 @@ func callToAfterUpdate(document interface{}) error {
 	return nil
 }
 
+// callToBeforeUpdate internal method
 func callToBeforeUpdate(document interface{}) error {
 	if event, ok := document.(BeforeUpdate); ok {
 		if err := event.BeforeUpdate(); err != nil {
@@ -66,6 +70,7 @@ func callToBeforeUpdate(document interface{}) error {
 	return nil
 }
 
+// callToAfterInsert internal method
 func callToAfterInsert(document interface{}) error {
 	if event, ok := document.(AfterInsert); ok {
 		if err := event.AfterInsert(); err != nil {
@@ -75,6 +80,7 @@ func callToAfterInsert(document interface{}) error {
 	return nil
 }
 
+// callToBeforeInsert internal method
 func callToBeforeInsert(document interface{}) error {
 	if event, ok := document.(BeforeInsert); ok {
 		if err := event.BeforeInsert(); err != nil {
