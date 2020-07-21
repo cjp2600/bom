@@ -456,7 +456,7 @@ func (b *Bom) AggregateWithPagination(callback func(c *mongo.Cursor) (int32, err
 
 	defer cur.Close(ctx)
 
-	count := int32(0)
+	var count int32
 	if count, err = callback(cur); err != nil {
 		return nil, err
 	}
