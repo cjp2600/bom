@@ -19,7 +19,7 @@ const (
 	DefaultSize         = 20
 )
 
-// Option bom size type
+// Size option bom size type
 type Size int32
 
 // Define common structures
@@ -43,7 +43,7 @@ type (
 		// go.mongodb.org/mongo-driver options (with setters)
 		options Options
 
-		lastId         string
+		lastID         string
 		useAggregation bool
 		selectArg      []interface{}
 
@@ -159,9 +159,9 @@ func (b *Bom) WithSort(sort *Sort) *Bom {
 	return b
 }
 
-// WithLastId set custom lastId
-func (b *Bom) WithLastId(lastId string) *Bom {
-	b.lastId = lastId
+// WithLastID set custom lastID
+func (b *Bom) WithLastID(lastID string) *Bom {
+	b.lastID = lastID
 	return b
 }
 
@@ -216,7 +216,7 @@ func (b *Bom) Select(arg ...interface{}) *Bom {
 }
 
 // FillPipeline fill aggregation pipelines
-func (b *Bom) FillPipeline(p ...Stager) {
+func (b *Bom) FillPipeline(p ...StageInterface) {
 	if b.pipeline == nil {
 		b.pipeline = make(AggregateStages, 0)
 	}
@@ -282,7 +282,7 @@ func (b *Bom) NotWhereIn(field string, value interface{}) *Bom {
 	return b
 }
 
-// OrWhereNotEq or where in condition example: bom.OrWhereEq("age", 30)
+// OrWhereEq or where in condition example: bom.OrWhereEq("age", 30)
 func (b *Bom) OrWhereEq(field string, value interface{}) *Bom {
 	b = b.orWhereConditions(field, EqualConditionOperator, value)
 	return b
@@ -345,7 +345,7 @@ func (b *Bom) BuildProjection() primitive.M {
 	return result
 }
 
-//Deprecated: method works not correctly use bom generator (https://github.com/cjp2600/protoc-gen-bom)
+// Update Deprecated: method works not correctly use bom generator (https://github.com/cjp2600/protoc-gen-bom)
 func (b *Bom) Update(entity interface{}) (*mongo.UpdateResult, error) {
 	mp, _ := b.structToMap(entity)
 	var eRes []primitive.E
@@ -518,12 +518,12 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 	return pagination.WithTotal(int32(count)), err
 }
 
-// ListWithLastId iteration method for deep pagination
-func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId string, err error) {
+// ListWithLastID iteration method for deep pagination
+func (b *Bom) ListWithLastID(callback func(cursor *mongo.Cursor) error) (lastID string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
 
-	lastId = b.lastId
+	lastID = b.lastID
 	cur := &mongo.Cursor{}
 
 	defer cur.Close(ctx)
@@ -535,8 +535,8 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 		findOptions.SetProjection(projection)
 	}
 
-	if lastId != "" {
-		b.whereConditions("_id", GreaterConditionOperator, ToObj(lastId))
+	if lastID != "" {
+		b.whereConditions("_id", GreaterConditionOperator, ToObj(lastID))
 	}
 
 	cur, err = b.Mongo().Find(ctx, b.getCondition(), findOptions)
@@ -562,9 +562,9 @@ func (b *Bom) ListWithLastId(callback func(cursor *mongo.Cursor) error) (lastId 
 
 	if count > int64(b.limit.Size) {
 		return lastElement.Hex(), err
-	} else {
-		return "", err
 	}
+
+	return "", err
 }
 
 // List Common items list method

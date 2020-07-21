@@ -2,11 +2,14 @@ package bom
 
 import "go.mongodb.org/mongo-driver/bson/primitive"
 
+// SkipWhenUpdating data with skip update fields
 var SkipWhenUpdating = map[string]bool{"id": true, "createdat": true, "updatedat": true}
 
+// SortTypeMatcher value matcher
 var SortTypeMatcher = map[string]int32{"asc": 1, "desc": -1}
 
-type Stager interface {
+// StageInterface interface for stage
+type StageInterface interface {
 	GetStage() primitive.M
 }
 
