@@ -14,31 +14,69 @@ type StageInterface interface {
 }
 
 const (
-	EqualConditionOperator          = "$eq"
-	NotEqualConditionOperator       = "$ne"
-	GreaterConditionOperator        = "$gt"
-	GreaterOrEqualConditionOperator = "$gte"
-	LessConditionOperator           = "$lt"
-	LessOrEqualConditionOperator    = "$lte"
-	InConditionOperator             = "$in"
-	NotInConditionOperator          = "$nin"
+	// EqualConditionOperator mongo db operator
+	EqualConditionOperator = "$eq"
 
+	// NotEqualConditionOperator mongo db operator
+	NotEqualConditionOperator = "$ne"
+
+	// GreaterConditionOperator mongo db operator
+	GreaterConditionOperator = "$gt"
+
+	// GreaterOrEqualConditionOperator mongo db operator
+	GreaterOrEqualConditionOperator = "$gte"
+
+	// LessConditionOperator mongo db operator
+	LessConditionOperator = "$lt"
+
+	// LessOrEqualConditionOperator mongo db operator
+	LessOrEqualConditionOperator = "$lte"
+
+	// InConditionOperator mongo db operator
+	InConditionOperator = "$in"
+
+	// NotInConditionOperator mongo db operator
+	NotInConditionOperator = "$nin"
+
+	// AndConditionOperator mongo db operator
 	AndConditionOperator = "$and"
-	OrConditionOperator  = "$or"
+
+	// OrConditionOperator mongo db operator
+	OrConditionOperator = "$or"
+
+	// NotConditionOperator mongo db operator
 	NotConditionOperator = "$not"
+
+	// NorConditionOperator mongo db operator
 	NorConditionOperator = "$nor"
 
+	// ExistsConditionOperator mongo db operator
 	ExistsConditionOperator = "$exists"
-	TypeConditionOperator   = "$type"
 
-	LookupAggregateOperator  = "$lookup"
-	FacetAggregateOperator   = "$facet"
-	MatchAggregateOperator   = "$match"
+	// TypeConditionOperator mongo db operator
+	TypeConditionOperator = "$type"
+
+	// LookupAggregateOperator mongo db operator
+	LookupAggregateOperator = "$lookup"
+
+	// FacetAggregateOperator mongo db operator
+	FacetAggregateOperator = "$facet"
+
+	// MatchAggregateOperator mongo db operator
+	MatchAggregateOperator = "$match"
+
+	// ProjectAggregateOperator mongo db operator
 	ProjectAggregateOperator = "$project"
 
+	// LimitOperator mongo db operator
 	LimitOperator = "$limit"
-	SkipOperator  = "$skip"
-	SortOperator  = "$sort"
 
+	// SkipOperator mongo db operator
+	SkipOperator = "$skip"
+
+	// SortOperator mongo db operator
+	SortOperator = "$sort"
+
+	// ElMathConditionOperator mongo db operator
 	ElMathConditionOperator = "$elemMatch"
 )

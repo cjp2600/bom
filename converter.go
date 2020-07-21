@@ -15,10 +15,10 @@ func ToObj(val string) primitive.ObjectID {
 
 // ToObjects convert slice strings to slice ObjectID
 func ToObjects(values []string) []primitive.ObjectID {
-	var objectIds []primitive.ObjectID
+	var objectIDs []primitive.ObjectID
 	for _, id := range values {
-		objectId, _ := primitive.ObjectIDFromHex(id)
-		objectIds = append(objectIds, objectId)
+		objectID, _ := primitive.ObjectIDFromHex(id)
+		objectIDs = append(objectIDs, objectID)
 	}
-	return objectIds
+	return objectIDs
 }
