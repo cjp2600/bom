@@ -485,7 +485,6 @@ func (b *Bom) FindOneAndUpdate(update interface{}) (*mongo.SingleResult, error) 
 // FindOneAndDelete find and delete item method
 func (b *Bom) FindOneAndDelete() (*mongo.SingleResult, error) {
 	defer b.cancel()
-
 	err := callToBeforeDelete(b.model)
 	if err != nil {
 		return nil, err
@@ -500,7 +499,6 @@ func (b *Bom) FindOneAndDelete() (*mongo.SingleResult, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return r, nil
 }
 
