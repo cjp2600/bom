@@ -5,6 +5,7 @@ package bom
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
@@ -626,10 +627,6 @@ func (b *Bom) ListWithLastID(callback func(cursor *mongo.Cursor) error) (lastID 
 	defer b.cancel()
 
 	lastID = b.lastID
-	cur := &mongo.Cursor{}
-
-	defer cur.Close(b.ctx)
-
 	findOptions := options.Find()
 	findOptions.SetLimit(int64(b.limit.Size))
 
@@ -641,23 +638,39 @@ func (b *Bom) ListWithLastID(callback func(cursor *mongo.Cursor) error) (lastID 
 		b.whereConditions("_id", GreaterConditionOperator, ToObj(lastID))
 	}
 
-	cur, err = b.Mongo().Find(b.ctx, b.getCondition(), findOptions)
+	cur, err := b.Mongo().Find(b.ctx, b.getCondition(), findOptions)
 	if err != nil {
 		return "", err
 	}
 
-	var lastElement primitive.ObjectID
+	defer func() {
+		err := cur.Close(b.ctx)
+		if err != nil {
+			log.Println(err)
+		}
+	}()
 
+	var lastElement primitive.ObjectID
 	for cur.Next(b.ctx) {
 		err = callback(cur)
 		lastElement = cur.Current.Lookup("_id").ObjectID()
 	}
-
 	if err := cur.Err(); err != nil {
 		return "", err
 	}
 
-	count, err := b.Mongo().CountDocuments(b.ctx, b.getCondition())
+	var count int64
+	if b.getCondition() != nil {
+		if bs, ok := b.getCondition().(primitive.M); ok {
+			if len(bs) > 0 {
+				count, err = b.Mongo().CountDocuments(b.ctx, b.getCondition())
+			} else {
+				count, err = b.Mongo().EstimatedDocumentCount(b.ctx)
+			}
+		}
+	} else {
+		count, err = b.Mongo().EstimatedDocumentCount(b.ctx)
+	}
 	if err != nil {
 		return "", err
 	}
