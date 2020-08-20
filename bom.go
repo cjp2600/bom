@@ -236,6 +236,12 @@ func (b *Bom) Select(arg ...interface{}) *Bom {
 	return b
 }
 
+// AddSelect analog classic orm method for field
+func (b *Bom) AddSelect(arg interface{}) *Bom {
+	b.selectArg = append(b.selectArg, arg)
+	return b
+}
+
 // FillPipeline fill aggregation pipelines
 func (b *Bom) FillPipeline(p ...StageInterface) {
 	if b.pipeline == nil {
