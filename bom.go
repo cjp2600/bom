@@ -249,6 +249,11 @@ func (b *Bom) FillPipeline(p ...StageInterface) {
 	}
 }
 
+//Deprecated: should use WhereConditions or WhereEq
+func (b *Bom) Where(field string, value interface{}) *Bom {
+	return b.WhereEq(field, value)
+}
+
 // WhereEq where condition example: bom.WhereEq("_id", bom.ToObject(id))
 func (b *Bom) WhereEq(field string, value interface{}) *Bom {
 	b = b.whereConditions(field, EqualConditionOperator, value)
