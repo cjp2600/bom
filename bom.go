@@ -30,8 +30,6 @@ type (
 	Bom struct {
 		// default mongodb client (go.mongodb.org/mongo-driver)
 		client *mongo.Client
-		ctx    context.Context
-		cancel context.CancelFunc
 		model  interface{}
 
 		// configuration fields
@@ -115,11 +113,6 @@ func New(options ...Option) (*Bom, error) {
 		}
 	}
 
-	// set default context
-	if b.ctx == nil {
-		b.ctx, b.cancel = context.WithTimeout(context.Background(), b.queryTimeout)
-	}
-
 	// check exist client
 	if b.client == nil {
 		return nil, ErrClientRequired
@@ -151,9 +144,8 @@ func (b *Bom) WithTimeout(time time.Duration) *Bom {
 	return b
 }
 
-// WithContext enrich query with timeout
+// Deprecated: WithContext method should not be used
 func (b *Bom) WithContext(ctx context.Context) *Bom {
-	b.ctx, b.cancel = context.WithTimeout(ctx, b.queryTimeout)
 	return b
 }
 
@@ -399,14 +391,16 @@ func (b *Bom) Update(entity interface{}) (*mongo.UpdateResult, error) {
 
 // UpdateRaw - update one eq
 func (b *Bom) UpdateRaw(update interface{}) (*mongo.UpdateResult, error) {
-	defer b.cancel()
-
 	err := callToBeforeUpdate(b.model)
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := b.Mongo().UpdateOne(b.ctx, b.getCondition(), update, b.options.updateOptions...)
+	// set default context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	res, err := b.Mongo().UpdateOne(ctx, b.getCondition(), update, b.options.updateOptions...)
 
 	err = callToAfterUpdate(b.model)
 	if err != nil {
@@ -418,14 +412,16 @@ func (b *Bom) UpdateRaw(update interface{}) (*mongo.UpdateResult, error) {
 
 // InsertOne - insert one method
 func (b *Bom) InsertOne(document interface{}) (*mongo.InsertOneResult, error) {
-	defer b.cancel()
-
 	err := callToBeforeInsert(b.model)
 	if err != nil {
 		return nil, err
 	}
 
-	insertOneResult, err := b.Mongo().InsertOne(b.ctx, document, b.options.insertOptions...)
+	// set default context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	insertOneResult, err := b.Mongo().InsertOne(ctx, document, b.options.insertOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +436,6 @@ func (b *Bom) InsertOne(document interface{}) (*mongo.InsertOneResult, error) {
 
 // InsertMany insert meany
 func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, error) {
-	defer b.cancel()
 
 	for _, document := range documents {
 		err := callToBeforeInsert(document)
@@ -449,7 +444,11 @@ func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, erro
 		}
 	}
 
-	insertManyResult, err := b.Mongo().InsertMany(b.ctx, documents)
+	// set default context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	insertManyResult, err := b.Mongo().InsertMany(ctx, documents)
 	if err != nil {
 		return nil, err
 	}
@@ -466,22 +465,28 @@ func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, erro
 
 // FindOne find one item method.
 func (b *Bom) FindOne(callback func(s *mongo.SingleResult) error) error {
-	defer b.cancel()
 
-	s := b.Mongo().FindOne(b.ctx, b.getCondition(), b.options.findOneOptions...)
+	// set default context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	s := b.Mongo().FindOne(ctx, b.getCondition(), b.options.findOneOptions...)
 	return callback(s)
 }
 
 // FindOneAndUpdate find and update item method
 func (b *Bom) FindOneAndUpdate(update interface{}) (*mongo.SingleResult, error) {
-	defer b.cancel()
 
 	err := callToBeforeUpdate(b.model)
 	if err != nil {
 		return nil, err
 	}
 
-	r := b.Mongo().FindOneAndUpdate(b.ctx, b.getCondition(), update, b.options.findOneAndUpdateOptions...)
+	// set default context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	r := b.Mongo().FindOneAndUpdate(ctx, b.getCondition(), update, b.options.findOneAndUpdateOptions...)
 	if r.Err() != nil {
 		return nil, err
 	}
@@ -496,13 +501,15 @@ func (b *Bom) FindOneAndUpdate(update interface{}) (*mongo.SingleResult, error) 
 
 // FindOneAndDelete find and delete item method
 func (b *Bom) FindOneAndDelete() (*mongo.SingleResult, error) {
-	defer b.cancel()
 	err := callToBeforeDelete(b.model)
 	if err != nil {
 		return nil, err
 	}
 
-	r := b.Mongo().FindOneAndDelete(b.ctx, b.getCondition())
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	r := b.Mongo().FindOneAndDelete(ctx, b.getCondition())
 	if r.Err() != nil {
 		return nil, err
 	}
@@ -516,20 +523,26 @@ func (b *Bom) FindOneAndDelete() (*mongo.SingleResult, error) {
 
 // DeleteMany delete many
 func (b *Bom) DeleteMany() (*mongo.DeleteResult, error) {
-	defer b.cancel()
-	return b.Mongo().DeleteMany(b.ctx, b.getCondition())
+
+	// set default context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	return b.Mongo().DeleteMany(ctx, b.getCondition())
 }
 
 // Delete delete item
 func (b *Bom) Delete() (*mongo.DeleteResult, error) {
-	defer b.cancel()
-
 	err := callToBeforeDelete(b.model)
 	if err != nil {
 		return nil, err
 	}
 
-	r, err := b.Mongo().DeleteOne(b.ctx, b.getCondition())
+	// set default context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	r, err := b.Mongo().DeleteOne(ctx, b.getCondition())
 	if err != nil {
 		return nil, err
 	}
@@ -544,8 +557,6 @@ func (b *Bom) Delete() (*mongo.DeleteResult, error) {
 
 // AggregateWithPagination pagination aggr
 func (b *Bom) AggregateWithPagination(callback func(c *mongo.Cursor) (int32, error)) (*Pagination, error) {
-	defer b.cancel()
-
 	aggregateOpts := options.Aggregate()
 	aggregateOpts.SetAllowDiskUse(false)
 
@@ -566,12 +577,16 @@ func (b *Bom) AggregateWithPagination(callback func(c *mongo.Cursor) (int32, err
 		return nil, err
 	}
 
-	cur, err := b.Mongo().Aggregate(b.ctx, pipeline, b.options.aggregateOptions...)
+	// set default context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	cur, err := b.Mongo().Aggregate(ctx, pipeline, b.options.aggregateOptions...)
 	if err != nil {
 		return &Pagination{}, err
 	}
 
-	defer cur.Close(b.ctx)
+	defer cur.Close(ctx)
 
 	var count int32
 	if count, err = callback(cur); err != nil {
@@ -587,8 +602,6 @@ func (b *Bom) AggregateWithPagination(callback func(c *mongo.Cursor) (int32, err
 
 // ListWithPagination list of items with pagination
 func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pagination, error) {
-	defer b.cancel()
-
 	pagination := NewPagination(b.limit.Page, b.limit.Size)
 	limit, offset := pagination.CalculateOffset()
 
@@ -604,14 +617,18 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 	condition := b.getCondition()
 	b.options.findOptions = append(b.options.findOptions, findOptions)
 
+	// set default context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	var count int64
 	var err error
 	if condition != nil {
 		if bs, ok := condition.(primitive.M); ok {
 			if len(bs) > 0 {
-				count, err = b.Mongo().CountDocuments(b.ctx, condition)
+				count, err = b.Mongo().CountDocuments(ctx, condition)
 			} else {
-				count, err = b.Mongo().EstimatedDocumentCount(b.ctx)
+				count, err = b.Mongo().EstimatedDocumentCount(ctx)
 			}
 		}
 	}
@@ -619,12 +636,12 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 	if err != nil {
 		return &Pagination{}, err
 	}
-	cur, err := b.Mongo().Find(b.ctx, condition, b.options.findOptions...)
+	cur, err := b.Mongo().Find(ctx, condition, b.options.findOptions...)
 	if err != nil {
 		return &Pagination{}, err
 	}
-	defer cur.Close(b.ctx)
-	for cur.Next(b.ctx) {
+	defer cur.Close(ctx)
+	for cur.Next(ctx) {
 		err = callback(cur)
 	}
 	if err := cur.Err(); err != nil {
@@ -635,7 +652,6 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 
 // ListWithLastID iteration method for deep pagination
 func (b *Bom) ListWithLastID(callback func(cursor *mongo.Cursor) error) (lastID string, err error) {
-	defer b.cancel()
 
 	lastID = b.lastID
 	findOptions := options.Find()
@@ -649,20 +665,24 @@ func (b *Bom) ListWithLastID(callback func(cursor *mongo.Cursor) error) (lastID 
 		b.whereConditions("_id", GreaterConditionOperator, ToObj(lastID))
 	}
 
-	cur, err := b.Mongo().Find(b.ctx, b.getCondition(), findOptions)
+	// set default context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	cur, err := b.Mongo().Find(ctx, b.getCondition(), findOptions)
 	if err != nil {
 		return "", err
 	}
 
 	defer func() {
-		err := cur.Close(b.ctx)
+		err := cur.Close(ctx)
 		if err != nil {
 			log.Println(err)
 		}
 	}()
 
 	var lastElement primitive.ObjectID
-	for cur.Next(b.ctx) {
+	for cur.Next(ctx) {
 		err = callback(cur)
 		lastElement = cur.Current.Lookup("_id").ObjectID()
 	}
@@ -674,13 +694,13 @@ func (b *Bom) ListWithLastID(callback func(cursor *mongo.Cursor) error) (lastID 
 	if b.getCondition() != nil {
 		if bs, ok := b.getCondition().(primitive.M); ok {
 			if len(bs) > 0 {
-				count, err = b.Mongo().CountDocuments(b.ctx, b.getCondition())
+				count, err = b.Mongo().CountDocuments(ctx, b.getCondition())
 			} else {
-				count, err = b.Mongo().EstimatedDocumentCount(b.ctx)
+				count, err = b.Mongo().EstimatedDocumentCount(ctx)
 			}
 		}
 	} else {
-		count, err = b.Mongo().EstimatedDocumentCount(b.ctx)
+		count, err = b.Mongo().EstimatedDocumentCount(ctx)
 	}
 	if err != nil {
 		return "", err
@@ -695,21 +715,23 @@ func (b *Bom) ListWithLastID(callback func(cursor *mongo.Cursor) error) (lastID 
 
 // List Common items list method
 func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
-	defer b.cancel()
-
 	findOptions := options.Find()
 	if projection := b.BuildProjection(); projection != nil {
 		findOptions.SetProjection(projection)
 	}
 
-	cur, err := b.Mongo().Find(b.ctx, b.getCondition(), findOptions)
+	// set default context
+	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
+	cur, err := b.Mongo().Find(ctx, b.getCondition(), findOptions)
 	if err != nil {
 		return err
 	}
 
-	defer cur.Close(b.ctx)
+	defer cur.Close(ctx)
 
-	for cur.Next(b.ctx) {
+	for cur.Next(ctx) {
 		err = callback(cur)
 	}
 
