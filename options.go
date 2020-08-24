@@ -57,10 +57,9 @@ func SetModel(document interface{}) Option {
 	}
 }
 
-// SetContext set custom context
+// Deprecated: SetContext method should not be used
 func SetContext(ctx context.Context) Option {
 	return func(b *Bom) error {
-		b.ctx, b.cancel = context.WithTimeout(ctx, b.queryTimeout)
 		return nil
 	}
 }
