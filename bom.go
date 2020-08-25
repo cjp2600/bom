@@ -5,7 +5,7 @@ package bom
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"fmt"
 	"strings"
 	"time"
 
@@ -681,7 +681,7 @@ func (b *Bom) ListWithLastID(callback func(cursor *mongo.Cursor) error) (lastID 
 	defer func() {
 		err := cur.Close(ctx)
 		if err != nil {
-			log.Println(err)
+			fmt.Println(err)
 		}
 	}()
 
