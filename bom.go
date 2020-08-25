@@ -632,10 +632,14 @@ func (b *Bom) ListWithPagination(callback func(cursor *mongo.Cursor) error) (*Pa
 			}
 		}
 	}
-
 	if err != nil {
 		return &Pagination{}, err
 	}
+
+	// set default context
+	ctx, cancel = context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
+
 	cur, err := b.Mongo().Find(ctx, condition, b.options.findOptions...)
 	if err != nil {
 		return &Pagination{}, err
@@ -689,6 +693,10 @@ func (b *Bom) ListWithLastID(callback func(cursor *mongo.Cursor) error) (lastID 
 	if err := cur.Err(); err != nil {
 		return "", err
 	}
+
+	// set default context
+	ctx, cancel = context.WithTimeout(context.Background(), b.queryTimeout)
+	defer cancel()
 
 	var count int64
 	if b.getCondition() != nil {
