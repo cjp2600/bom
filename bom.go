@@ -475,6 +475,12 @@ func (b *Bom) InsertMany(documents []interface{}) (*mongo.InsertManyResult, erro
 // FindOne find one item method.
 func (b *Bom) FindOne(callback func(s *mongo.SingleResult) error) error {
 
+	var findOptions = options.FindOne()
+	if projection := b.BuildProjection(); projection != nil {
+		findOptions.SetProjection(projection)
+	}
+	b.options.findOneOptions = append(b.options.findOneOptions, findOptions)
+
 	// set default context
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
@@ -494,6 +500,12 @@ func (b *Bom) FindOneAndUpdate(update interface{}) (*mongo.SingleResult, error) 
 	// set default context
 	ctx, cancel := context.WithTimeout(context.Background(), b.queryTimeout)
 	defer cancel()
+
+	var findOptions = options.FindOneAndUpdate()
+	if projection := b.BuildProjection(); projection != nil {
+		findOptions.SetProjection(projection)
+	}
+	b.options.findOneAndUpdateOptions = append(b.options.findOneAndUpdateOptions, findOptions)
 
 	r := b.Mongo().FindOneAndUpdate(ctx, b.getCondition(), update, b.options.findOneAndUpdateOptions...)
 	if r.Err() != nil {
