@@ -7,6 +7,11 @@ func ElMatch(key string, val interface{}) ElemMatch {
 	return ElemMatch{Key: key, Val: val}
 }
 
+// ElMatch create ElemMatch object
+func ElSlice(key string, limit, offset int32) ElemSlice {
+	return ElemSlice{Key: key, Limit: limit, Offset: offset}
+}
+
 // ToObj convert string to ObjectID
 func ToObj(val string) primitive.ObjectID {
 	objectID, _ := primitive.ObjectIDFromHex(val)

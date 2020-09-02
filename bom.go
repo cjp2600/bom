@@ -90,6 +90,13 @@ type (
 		Key string
 		Val interface{}
 	}
+
+	// Slice data for projection
+	ElemSlice struct {
+		Key    string
+		Limit  int32
+		Offset int32
+	}
 )
 
 // Mongo source client (go.mongodb.org/mongo-driver)
@@ -357,6 +364,8 @@ func (b *Bom) BuildProjection() primitive.M {
 			switch v := item.(type) {
 			case string:
 				result[v] = 1
+			case ElemSlice:
+				result[v.Key] = primitive.M{"$slice": primitive.A{v.Offset, v.Limit}}
 			case ElemMatch:
 				if vo, ok := v.Val.(ElemMatch); ok {
 					var sub = make(primitive.M)
