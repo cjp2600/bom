@@ -364,6 +364,8 @@ func (b *Bom) BuildProjection() primitive.M {
 			switch v := item.(type) {
 			case string:
 				result[v] = 1
+			case primitive.E:
+				result[v.Key] = v.Value
 			case ElemSlice:
 				result[v.Key] = primitive.M{"$slice": primitive.A{v.Offset, v.Limit}}
 			case ElemMatch:
