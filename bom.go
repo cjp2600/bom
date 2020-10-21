@@ -481,6 +481,9 @@ func (b *Bom) FindOne(callback func(s *mongo.SingleResult) error) error {
 	if projection := b.BuildProjection(); projection != nil {
 		findOptions.SetProjection(projection)
 	}
+	if sm := b.getSort(); sm != nil {
+		findOptions.SetSort(sm)
+	}
 	b.options.findOneOptions = append(b.options.findOneOptions, findOptions)
 
 	// set default context
@@ -506,6 +509,9 @@ func (b *Bom) FindOneAndUpdate(update interface{}) (*mongo.SingleResult, error) 
 	var findOptions = options.FindOneAndUpdate()
 	if projection := b.BuildProjection(); projection != nil {
 		findOptions.SetProjection(projection)
+	}
+	if sm := b.getSort(); sm != nil {
+		findOptions.SetSort(sm)
 	}
 	b.options.findOneAndUpdateOptions = append(b.options.findOneAndUpdateOptions, findOptions)
 
