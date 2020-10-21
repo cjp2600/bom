@@ -682,6 +682,9 @@ func (b *Bom) ListWithLastID(callback func(cursor *mongo.Cursor) error) (lastID 
 	findOptions := options.Find()
 	findOptions.SetLimit(int64(b.limit.Size))
 
+	if sm := b.getSort(); sm != nil {
+		findOptions.SetSort(sm)
+	}
 	if projection := b.BuildProjection(); projection != nil {
 		findOptions.SetProjection(projection)
 	}
@@ -747,6 +750,9 @@ func (b *Bom) List(callback func(cursor *mongo.Cursor) error) error {
 	findOptions := options.Find()
 	if projection := b.BuildProjection(); projection != nil {
 		findOptions.SetProjection(projection)
+	}
+	if sm := b.getSort(); sm != nil {
+		findOptions.SetSort(sm)
 	}
 
 	// set default context
